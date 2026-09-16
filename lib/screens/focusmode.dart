@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../services/android_focus_notification.dart';
+
 enum FocusTimerStatus { ready, running, paused, completed }
 
 class FocusTimerController extends ChangeNotifier
@@ -13,10 +15,14 @@ class FocusTimerController extends ChangeNotifier
     Duration(minutes: 45),
   ];
 
-  FocusTimerController() {
+  FocusTimerController({
+    AndroidFocusNotification notification =
+        const AndroidFocusNotification(),
+  }) : _notification = notification {
     WidgetsBinding.instance.addObserver(this);
   }
 
+  final AndroidFocusNotification _notification;
   Duration _selectedDuration = durationOptions[2];
   Duration _remaining = durationOptions[2];
   DateTime? _finishingAt;
@@ -69,6 +75,7 @@ class FocusTimerController extends ChangeNotifier
     _status = FocusTimerStatus.running;
     notifyListeners();
     _startDisplayTimer();
+    unawaited(_notification.show(finishingAt: _finishingAt!));
   }
 
   void pauseSession() {
@@ -77,6 +84,7 @@ class FocusTimerController extends ChangeNotifier
     _finishingAt = null;
     _status = FocusTimerStatus.paused;
     notifyListeners();
+    unawaited(_notification.hide());
   }
 
   void resumeSession() {
@@ -84,6 +92,7 @@ class FocusTimerController extends ChangeNotifier
     _status = FocusTimerStatus.running;
     notifyListeners();
     _startDisplayTimer();
+    unawaited(_notification.show(finishingAt: _finishingAt!));
   }
 
   void cancelSession() {
@@ -92,6 +101,7 @@ class FocusTimerController extends ChangeNotifier
     _remaining = _selectedDuration;
     _status = FocusTimerStatus.ready;
     notifyListeners();
+    unawaited(_notification.hide());
   }
 
   void _startDisplayTimer() {
@@ -110,6 +120,7 @@ class FocusTimerController extends ChangeNotifier
       _displayTimer?.cancel();
       _finishingAt = null;
       _status = FocusTimerStatus.completed;
+      unawaited(_notification.hide());
     }
     notifyListeners();
   }
@@ -127,6 +138,7 @@ class FocusTimerController extends ChangeNotifier
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _displayTimer?.cancel();
+    unawaited(_notification.hide());
     super.dispose();
   }
 }
