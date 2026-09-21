@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/android_focus_notification.dart';
 
@@ -8,6 +9,9 @@ enum FocusTimerStatus { ready, running, paused, completed }
 
 class FocusTimerController extends ChangeNotifier
     with WidgetsBindingObserver {
+  static const minimumDurationMinutes = 1;
+  static const maximumDurationMinutes = 180;
+
   static const durationOptions = <Duration>[
     Duration(minutes: 5),
     Duration(minutes: 15),
@@ -64,6 +68,19 @@ class FocusTimerController extends ChangeNotifier
   }
 
   void selectDuration(Duration duration) {
+    final minutes = duration.inMinutes;
+    final isWholeMinute = duration == Duration(minutes: minutes);
+    if (!isWholeMinute ||
+        minutes < minimumDurationMinutes ||
+        minutes > maximumDurationMinutes) {
+      throw ArgumentError.value(
+        duration,
+        'duration',
+        'Duration must be a whole number of minutes between '
+            '$minimumDurationMinutes and $maximumDurationMinutes.',
+      );
+    }
+
     _selectedDuration = duration;
     _remaining = duration;
     notifyListeners();
@@ -168,56 +185,159 @@ class _FocusTimerView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isReady = controller.status == FocusTimerStatus.ready;
+    final isCustomDuration = !FocusTimerController.durationOptions.contains(
+      controller.selectedDuration,
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('Focus Mode')),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Spacer(),
-              Text(
-                controller.status == FocusTimerStatus.completed
-                    ? 'Focus session complete'
-                    : controller.formattedRemaining,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.displayLarge,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                controller.statusMessage,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-              const SizedBox(height: 32),
-              if (isReady) ...[
-                const Text(
-                  'Choose a duration',
-                  textAlign: TextAlign.center,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final minimumContentHeight = constraints.maxHeight > 48
+                ? constraints.maxHeight - 48
+                : 0.0;
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: minimumContentHeight,
                 ),
-                const SizedBox(height: 12),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 8,
-                  children: [
-                    for (final duration in FocusTimerController.durationOptions)
-                      ChoiceChip(
-                        label: Text('${duration.inMinutes} min'),
-                        selected: duration == controller.selectedDuration,
-                        onSelected: (_) => controller.selectDuration(duration),
+                child: IntrinsicHeight(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Spacer(),
+                      Text(
+                        controller.status == FocusTimerStatus.completed
+                            ? 'Focus session complete'
+                            : controller.formattedRemaining,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.displayLarge,
                       ),
-                  ],
+                      const SizedBox(height: 12),
+                      Text(
+                        controller.statusMessage,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                      const SizedBox(height: 32),
+                      if (isReady) ...[
+                        const Text(
+                          'Choose a duration',
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final duration
+                                in FocusTimerController.durationOptions)
+                              ChoiceChip(
+                                label: Text('${duration.inMinutes} min'),
+                                selected:
+                                    duration == controller.selectedDuration,
+                                onSelected: (_) =>
+                                    controller.selectDuration(duration),
+                              ),
+                            ChoiceChip(
+                              avatar: const Icon(
+                                Icons.edit_outlined,
+                                size: 18,
+                              ),
+                              label: Text(
+                                isCustomDuration
+                                    ? 'Custom '
+                                        '(${controller.selectedDuration.inMinutes} min)'
+                                    : 'Custom',
+                              ),
+                              selected: isCustomDuration,
+                              onSelected: (_) =>
+                                  _chooseCustomDuration(context),
+                            ),
+                          ],
+                        ),
+                      ],
+                      const Spacer(),
+                      ..._buildActions(),
+                    ],
+                  ),
                 ),
-              ],
-              const Spacer(),
-              ..._buildActions(),
-            ],
-          ),
+              ),
+            );
+          },
         ),
       ),
     );
+  }
+
+  Future<void> _chooseCustomDuration(BuildContext context) async {
+    final formKey = GlobalKey<FormState>();
+    var enteredMinutes = controller.selectedDuration.inMinutes.toString();
+
+    final minutes = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        scrollable: true,
+        insetPadding: const EdgeInsets.symmetric(
+          horizontal: 24,
+          vertical: 24,
+        ),
+        title: const Text('Custom duration'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            initialValue: enteredMinutes,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            scrollPadding: const EdgeInsets.only(bottom: 96),
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            onChanged: (value) => enteredMinutes = value,
+            decoration: const InputDecoration(
+              labelText: 'Minutes',
+              helperText: 'Enter a duration from 1 to 180 minutes.',
+              suffixText: 'min',
+            ),
+            validator: (value) {
+              final parsedMinutes = int.tryParse(value ?? '');
+              if (parsedMinutes == null) {
+                return 'Enter a number of minutes.';
+              }
+              if (parsedMinutes <
+                      FocusTimerController.minimumDurationMinutes ||
+                  parsedMinutes >
+                      FocusTimerController.maximumDurationMinutes) {
+                return 'Enter a value from 1 to 180.';
+              }
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState?.validate() ?? false) {
+                Navigator.of(dialogContext).pop(
+                  int.parse(enteredMinutes),
+                );
+              }
+            },
+            child: const Text('Set duration'),
+          ),
+        ],
+      ),
+    );
+
+    if (minutes != null) {
+      controller.selectDuration(Duration(minutes: minutes));
+    }
   }
 
   List<Widget> _buildActions() {
