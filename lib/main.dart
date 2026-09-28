@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'database/app_database.dart';
 
 import 'screens/focusmode.dart';
+import 'screens/morningroutine.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -76,6 +77,18 @@ class _MyHomePageState extends State<MyHomePage> {
               },
               icon: const Icon(Icons.timer_outlined),
               label: const Text('Start Focus Mode'),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (context) => const MorningRoutineScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.wb_sunny_outlined),
+              label: const Text('Morning routine'),
             ),
           ],
         ),
