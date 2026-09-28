@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'screens/focusmode.dart';
+import 'screens/registration_screen.dart';
 import 'theme/app_theme.dart';
 
 void main() {
@@ -75,6 +76,19 @@ class _MyHomePageState extends State<MyHomePage> {
               },
               icon: const Icon(Icons.timer_outlined),
               label: const Text('Start Focus Mode'),
+            ),
+            const SizedBox(height: 12),
+
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (context) => const RegistrationScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.person_add_outlined),
+              label: const Text('Create Account'),
             ),
           ],
         ),
