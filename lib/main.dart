@@ -7,9 +7,7 @@ import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await AppDatabase.database;
-
   runApp(const MyApp());
 }
 
