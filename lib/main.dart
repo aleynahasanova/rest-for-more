@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 
+import 'database/app_database.dart';
+
 import 'screens/focusmode.dart';
 import 'theme/app_theme.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await AppDatabase.database;
+
   runApp(const MyApp());
 }
 
@@ -41,10 +47,7 @@ class _MyAppState extends State<MyApp> {
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({
-    required this.focusTimerController,
-    super.key,
-  });
+  const MyHomePage({required this.focusTimerController, super.key});
 
   final FocusTimerController focusTimerController;
 
