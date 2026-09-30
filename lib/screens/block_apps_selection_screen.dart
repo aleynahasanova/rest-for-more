@@ -6,12 +6,10 @@ import '../theme/app_colors.dart';
 import '../widgets/app_icon_badge.dart';
 import '../widgets/focus_primary_button.dart';
 import '../widgets/focus_screen_header.dart';
+import '../services/app_block_service.dart';
 
 class BlockAppsSelectionScreen extends StatefulWidget {
-  const BlockAppsSelectionScreen({
-    required this.initialSelection,
-    super.key,
-  });
+  const BlockAppsSelectionScreen({required this.initialSelection, super.key});
 
   final Set<String> initialSelection;
 
@@ -54,18 +52,17 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
               Text(
                 'What do you want to pause?',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontFamily: 'Georgia',
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.ink,
-                      height: 1.2,
-                    ),
+                  fontFamily: 'Georgia',
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.ink,
+                  height: 1.2,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
                 'These apps will be blocked during your focus.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppColors.ink.withValues(alpha: 0.65),
-                    ),
+                style: Theme.of(context).textTheme.bodyLarge
+                    ?.copyWith(color: AppColors.ink.withValues(alpha: 0.65)),
               ),
               const SizedBox(height: 24),
               Expanded(
@@ -84,9 +81,31 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+              TextButton(
+                onPressed: () async {
+                  await AppBlockService.openAccessibilitySettings();
+                },
+                child: const Text('Enable app blocking'),
+                // I want to add if the accessibility is enabled, the button should hidden (get feedback and help from teachers)
+              ),
+
+              const SizedBox(height: 8),
+
               FocusPrimaryButton(
                 label: 'Save selection',
-                onPressed: () => Navigator.of(context).pop(_selectedIds),
+                onPressed: () async {
+                  final packageNames = MockBlockableApps.all
+                      .where((app) => _selectedIds.contains(app.id))
+                      .map((app) => app.packageName)
+                      .toList();
+
+                  await AppBlockService.setBlockedApps(packageNames);
+                  await AppBlockService.startBlocking();
+
+                  if (!context.mounted) return;
+
+                  Navigator.of(context).pop(_selectedIds);
+                },
               ),
             ],
           ),
@@ -125,9 +144,9 @@ class _AppSelectionRow extends StatelessWidget {
                 child: Text(
                   app.name,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.ink,
-                      ),
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.ink,
+                  ),
                 ),
               ),
               _SelectionIndicator(isSelected: isSelected),
@@ -153,10 +172,7 @@ class _SelectionIndicator extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: isSelected ? AppColors.ink : Colors.transparent,
-        border: Border.all(
-          color: AppColors.ink,
-          width: isSelected ? 0 : 1.5,
-        ),
+        border: Border.all(color: AppColors.ink, width: isSelected ? 0 : 1.5),
       ),
       child: isSelected
           ? const Icon(Icons.check, size: 16, color: AppColors.surface)
