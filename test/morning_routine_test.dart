@@ -20,7 +20,10 @@ class MemoryRoutineService extends RoutineService {
     createdAt: DateTime(2026),
   );
   @override
-  Future<Routine> ensureMorningRoutine({String? userId}) async => routine;
+  Future<Routine> ensureMorningRoutine({
+    String? userId,
+    required List<(String, String, int)> defaults,
+  }) async => routine;
   @override
   Future<List<RoutineItem>> getRoutineItems(String id) async => List.of(items);
   @override
@@ -53,13 +56,17 @@ void main() {
       await RoutineTable.create(db);
       await RoutineItemTable.create(db);
       final service = RoutineService(databaseProvider: () async => db);
-      final routine = await service.ensureMorningRoutine();
+      final routine = await service.ensureMorningRoutine(
+        defaults: MorningRoutineScreen.defaultItems,
+      );
       final defaults = await service.getRoutineItems(routine.routineId);
       expect(defaults.length, 5);
       expect(defaults.every((item) => item.isDefault), isTrue);
       expect(defaults.map((item) => item.sortOrder), [0, 1, 2, 3, 4]);
       expect(
-        (await service.ensureMorningRoutine()).routineId,
+        (await service.ensureMorningRoutine(
+          defaults: MorningRoutineScreen.defaultItems,
+        )).routineId,
         routine.routineId,
       );
       expect((await service.getRoutineItems(routine.routineId)).length, 5);
@@ -82,10 +89,16 @@ void main() {
       expect(saved.first.title, 'A glass of water');
       expect(saved.first.startTime, '07:30');
       expect(saved.last.title, 'Read');
+      await reopened.reorderItems(saved.reversed.toList());
+      final reordered = await reopened.getRoutineItems(routine.routineId);
+      expect(reordered.first.title, 'Read');
+      expect(reordered.map((item) => item.sortOrder), [0, 1, 2, 3, 4, 5]);
       for (final item in saved) {
         await reopened.deleteRoutineItem(item.routineItemId);
       }
-      await reopened.ensureMorningRoutine();
+      await reopened.ensureMorningRoutine(
+        defaults: MorningRoutineScreen.defaultItems,
+      );
       expect(await reopened.getRoutineItems(routine.routineId), isEmpty);
       expect((await db.query('users')).length, 1);
     },
@@ -124,21 +137,27 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Read'), findsOneWidget);
     expect(service.items.single.startTime, '07:30');
-    await tester.tap(find.byTooltip('Edit Read'));
+    await tester.tap(find.text('Read'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).first, 'Read a chapter');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(service.items.single.title, 'Read a chapter');
-    await tester.tap(find.byType(Checkbox));
+    await tester.tap(find.byTooltip('Options for Read a chapter'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mark complete'));
     await tester.pumpAndSettle();
     expect(find.text('1 of 1 complete • 10 min planned'), findsOneWidget);
-    await tester.tap(find.byTooltip('Delete Read a chapter'));
+    await tester.tap(find.byTooltip('Options for Read a chapter'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(service.items.length, 1);
-    await tester.tap(find.byTooltip('Delete Read a chapter'));
+    await tester.tap(find.byTooltip('Options for Read a chapter'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();

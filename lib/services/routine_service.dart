@@ -26,7 +26,10 @@ class RoutineService {
 
   /// Creates defaults only when creating a routine, never when its list is empty.
   /// With no authenticated user, use a dedicated local-only guest profile.
-  Future<Routine> ensureMorningRoutine({String? userId}) async {
+  Future<Routine> ensureMorningRoutine({
+    String? userId,
+    required List<(String, String, int)> defaults,
+  }) async {
     final database = await _databaseProvider();
     return database.transaction((txn) async {
       const guestId = '00000000-0000-4000-8000-000000000001';
@@ -66,13 +69,6 @@ class RoutineService {
         createdAt: now,
       );
       await txn.insert(RoutineTable.tableName, routine.toMap());
-      const defaults = [
-        ('Drink water', 'Start your morning with a glass of water.', 2),
-        ('Morning stretch', 'Take a gentle movement break.', 5),
-        ('Freshen up', 'Make time to get ready for the day.', 10),
-        ('Have breakfast', 'Sit down and enjoy your breakfast.', 15),
-        ('Plan your day', 'Choose what matters most today.', 5),
-      ];
       for (var i = 0; i < defaults.length; i++) {
         final (title, description, minutes) = defaults[i];
         await txn.insert(
@@ -174,6 +170,21 @@ class RoutineService {
   }
 
   // DELETE
+  /// Persist the displayed order atomically, including rows with old gaps.
+  Future<void> reorderItems(List<RoutineItem> items) async {
+    final database = await _databaseProvider();
+    await database.transaction((txn) async {
+      for (var i = 0; i < items.length; i++) {
+        await txn.update(
+          RoutineItemTable.tableName,
+          {'sort_order': i, 'updated_at': DateTime.now().toIso8601String()},
+          where: 'routine_item_id = ? AND routine_id = ?',
+          whereArgs: [items[i].routineItemId, items[i].routineId],
+        );
+      }
+    });
+  }
+
   Future<void> deleteRoutine(String routineId) async {
     final database = await _databaseProvider();
 

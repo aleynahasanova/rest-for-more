@@ -1,130 +1,149 @@
 import 'package:flutter/material.dart';
 
 import '../models/routine_item.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 
-/// One block in a guided routine checklist.
-///
-/// The parent owns completion, editing, and ordering. Pass [onEdit] to show an
-/// edit button, and [onCompletedChanged] to enable the checkbox. Rebuild with
-/// updated [item] or [isCompleted] values after handling those callbacks.
-/// Accepts the model returned by RoutineService directly. Completion is local
-/// session state; editing and saving remain the parent's responsibility.
+/// A reusable flat routine step row, backed by the existing database model.
+/// Descriptions stay available in the editor. Completion lives in the menu so
+/// the schedule retains the prototype's icon rather than a checkbox.
 class RoutineItemCard extends StatelessWidget {
   const RoutineItemCard({
     required this.item,
+    this.time,
+    this.icon,
     this.isCompleted = false,
     this.onCompletedChanged,
     this.onEdit,
     this.onDelete,
+    this.onMoveUp,
+    this.onMoveDown,
     super.key,
   });
-
   final RoutineItem item;
+  final String? time;
+  final IconData? icon;
   final bool isCompleted;
   final ValueChanged<bool>? onCompletedChanged;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  final VoidCallback? onMoveUp;
+  final VoidCallback? onMoveDown;
 
-  // Stored times use HH:mm or HH:mm:ss (optionally fractional seconds).
-  // Render at minute precision without modifying the model's stored value.
-  static TimeOfDay? _parseStartTime(String? value) {
+  static String? clockTime(String? value) {
     if (value == null) return null;
-    final match = RegExp(r'^(\d{2}):(\d{2})(?::([0-5]\d)(?:\.\d+)?)?$')
+    final match = RegExp(r'^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d(?:\.\d+)?)?$')
         .firstMatch(value.trim());
-    if (match == null) return null;
-    final hour = int.parse(match[1]!);
-    final minute = int.parse(match[2]!);
-    if (hour > 23 || minute > 59) return null;
-    return TimeOfDay(hour: hour, minute: minute);
+    return match == null ? null : '${match[1]}:${match[2]}';
+  }
+
+  String get _duration {
+    final minutes = item.durationMinutes;
+    if (minutes == null) return 'Duration not set';
+    if (minutes < 60) return '$minutes min';
+    final hours = minutes ~/ 60;
+    final remainder = minutes % 60;
+    return remainder == 0 ? '$hours hr' : '$hours hr $remainder min';
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final description = item.description;
-    final startTime = _parseStartTime(item.startTime);
-    final durationMinutes = item.durationMinutes;
-
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: theme.colorScheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Checkbox(
-              value: isCompleted,
-              semanticLabel: item.title,
-              onChanged: onCompletedChanged == null
-                  ? null
-                  : (value) => onCompletedChanged!(value!),
+    final hasActions =
+        onEdit != null ||
+        onDelete != null ||
+        onMoveUp != null ||
+        onMoveDown != null ||
+        onCompletedChanged != null;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 52,
+            child: Text(
+              time ?? clockTime(item.startTime) ?? '—',
+              style: AppTypography.bodyMuted,
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+          ),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: const BoxDecoration(
+              color: AppColors.surfaceMuted,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon ?? Icons.check_circle_outline_rounded,
+              size: 18,
+              color: AppColors.brand,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Semantics(
+              button: onEdit != null,
+              child: GestureDetector(
+                onTap: onEdit,
+                behavior: HitTestBehavior.opaque,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      item.title,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        decoration: isCompleted
-                            ? TextDecoration.lineThrough
-                            : null,
-                      ),
-                    ),
-                    if (description != null &&
-                        description.trim().isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(description, style: theme.textTheme.bodyMedium),
-                    ],
-                    if (item.startTime != null || durationMinutes != null) ...[
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 8,
-                        children: [
-                          if (item.startTime != null)
-                            Text(
-                              startTime == null
-                                  ? 'Start time unavailable'
-                                  : 'Starts at ${startTime.format(context)}',
-                              style: theme.textTheme.labelLarge,
-                            ),
-                          if (durationMinutes != null)
-                            Text(
-                              '$durationMinutes min',
-                              semanticsLabel: '$durationMinutes minutes',
-                              style: theme.textTheme.labelLarge,
-                            ),
-                        ],
-                      ),
-                    ],
+                    Text(item.title, style: AppTypography.body),
+                    Text(_duration, style: AppTypography.bodyMuted),
                   ],
                 ),
               ),
             ),
-            if (onEdit != null)
-              IconButton(
-                onPressed: onEdit,
-                tooltip: 'Edit ${item.title}',
-                icon: const Icon(Icons.edit_outlined),
+          ),
+          if (hasActions)
+            PopupMenuButton<String>(
+              tooltip: 'Options for ${item.title}',
+              icon: const Icon(
+                Icons.more_vert_rounded,
+                size: 20,
+                color: AppColors.brandTint,
               ),
-            if (onDelete != null)
-              IconButton(
-                onPressed: onDelete,
-                tooltip: 'Delete ${item.title}',
-                icon: const Icon(Icons.delete_outline),
-              ),
-          ],
-        ),
+              color: AppColors.surface,
+              onSelected: (value) {
+                switch (value) {
+                  case 'duration':
+                  case 'rename':
+                    onEdit?.call();
+                  case 'up':
+                    onMoveUp?.call();
+                  case 'down':
+                    onMoveDown?.call();
+                  case 'remove':
+                    onDelete?.call();
+                  case 'complete':
+                    onCompletedChanged?.call(!isCompleted);
+                }
+              },
+              itemBuilder: (_) => [
+                if (onEdit != null) ...[
+                  const PopupMenuItem(
+                    value: 'duration',
+                    child: Text('Change duration'),
+                  ),
+                  const PopupMenuItem(value: 'rename', child: Text('Rename')),
+                ],
+                if (onMoveUp != null)
+                  const PopupMenuItem(value: 'up', child: Text('Move up')),
+                if (onMoveDown != null)
+                  const PopupMenuItem(value: 'down', child: Text('Move down')),
+                if (onDelete != null)
+                  const PopupMenuItem(value: 'remove', child: Text('Delete')),
+                if (onCompletedChanged != null)
+                  PopupMenuItem(
+                    value: 'complete',
+                    child: Text(
+                      isCompleted ? 'Mark incomplete' : 'Mark complete',
+                    ),
+                  ),
+              ],
+            ),
+        ],
       ),
     );
   }

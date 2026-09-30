@@ -6,6 +6,15 @@ import '../models/routine_item.dart';
 import '../services/routine_service.dart';
 
 class MorningRoutineScreen extends StatefulWidget {
+  /// Starter content owned by the morning routine, seeded only on creation.
+  static const defaultItems = <(String, String, int)>[
+    ('Drink water', 'Start your morning with a glass of water.', 2),
+    ('Morning stretch', 'Take a gentle movement break.', 5),
+    ('Freshen up', 'Make time to get ready for the day.', 10),
+    ('Have breakfast', 'Sit down and enjoy your breakfast.', 15),
+    ('Plan your day', 'Choose what matters most today.', 5),
+  ];
+
   const MorningRoutineScreen({this.service, this.userId, super.key});
   final RoutineService? service;
   final String? userId;
@@ -36,6 +45,7 @@ class _MorningRoutineScreenState extends State<MorningRoutineScreen> {
     try {
       final routine = await _service.ensureMorningRoutine(
         userId: widget.userId,
+        defaults: MorningRoutineScreen.defaultItems,
       );
       final items = await _service.getRoutineItems(routine.routineId);
       if (!mounted) return;
@@ -90,6 +100,49 @@ class _MorningRoutineScreenState extends State<MorningRoutineScreen> {
         },
       ),
     );
+  }
+
+  // Preview starts at 07:00, as in the prototype. Explicit stored times win.
+  String _scheduledTime(int index) {
+    var minutes = 7 * 60;
+    for (var i = 0; i <= index; i++) {
+      final explicit = RoutineItemCard.clockTime(_items[i].startTime);
+      if (explicit != null) {
+        final parts = explicit.split(':');
+        minutes = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+      }
+      if (i == index) break;
+      minutes += _items[i].durationMinutes ?? 0;
+    }
+    return '${(minutes ~/ 60 % 24).toString().padLeft(2, '0')}:'
+        '${(minutes % 60).toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _move(int index, int direction) async {
+    final reordered = List<RoutineItem>.of(_items);
+    final moved = reordered.removeAt(index);
+    reordered.insert(index + direction, moved);
+    setState(() => _saving = true);
+    try {
+      await _service.reorderItems(reordered);
+      if (!mounted) return;
+      setState(() {
+        _items = [
+          for (var i = 0; i < reordered.length; i++)
+            RoutineItem.fromMap({...reordered[i].toMap(), 'sort_order': i}),
+        ];
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not reorder steps. Please try again.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Future<void> _delete(RoutineItem item) async {
@@ -170,10 +223,18 @@ class _MorningRoutineScreenState extends State<MorningRoutineScreen> {
                       'Your morning is a blank page. Add your first step.',
                     ),
                   ),
-                for (final item in _items)
+                for (final (index, item) in _items.indexed)
                   RoutineItemCard(
                     key: ValueKey(item.routineItemId),
                     item: item,
+                    time: _scheduledTime(index),
+                    icon: _morningActivityIcon(item.title),
+                    onMoveUp: _saving || index == 0
+                        ? null
+                        : () => _move(index, -1),
+                    onMoveDown: _saving || index == _items.length - 1
+                        ? null
+                        : () => _move(index, 1),
                     isCompleted: _completed.contains(item.routineItemId),
                     onCompletedChanged: _saving
                         ? null
@@ -341,4 +402,27 @@ class _RoutineItemEditorState extends State<_RoutineItemEditor> {
       ],
     ),
   );
+}
+
+// The schema has no icon field. Derive an activity icon for known titles;
+// callers can override it without storing presentation details in SQLite.
+IconData _morningActivityIcon(String title) {
+  final text = title.toLowerCase();
+  for (final entry in <List<String>, IconData>{
+    ['water']: Icons.water_drop_outlined,
+    ['shower', 'douch', 'freshen']: Icons.shower_outlined,
+    ['teeth', 'tanden']: Icons.clean_hands_outlined,
+    ['dress', 'aankleden']: Icons.checkroom_outlined,
+    ['breakfast', 'ontbijt']: Icons.restaurant_outlined,
+    ['coffee', 'tea', 'koffie', 'thee']: Icons.local_cafe_outlined,
+    ['bed']: Icons.bed_outlined,
+    ['walk', 'buiten']: Icons.directions_walk_rounded,
+    ['stretch', 'exercise', 'bewegen', 'rekken']: Icons.fitness_center_outlined,
+    ['breathe', 'meditat', 'stil zitten']: Icons.self_improvement_outlined,
+    ['read', 'lezen']: Icons.menu_book_outlined,
+    ['plan', 'write', 'schrijven']: Icons.edit_note_rounded,
+  }.entries) {
+    if (entry.key.any(text.contains)) return entry.value;
+  }
+  return Icons.check_circle_outline_rounded;
 }

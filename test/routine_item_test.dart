@@ -16,7 +16,7 @@ void main() {
     createdAt: DateTime(2026, 9, 28),
   );
 
-  testWidgets('shows timing and delegates editing and completion to parent', (
+  testWidgets('prototype row exposes editing and completion through its menu', (
     tester,
   ) async {
     var completed = false;
@@ -24,33 +24,27 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: StatefulBuilder(
-            builder: (context, setState) => RoutineItemCard(
-              item: RoutineItem.fromMap(step().toMap()),
-              isCompleted: completed,
-              onCompletedChanged: (value) => setState(() => completed = value),
-              onEdit: () => edits++,
-            ),
+          body: RoutineItemCard(
+            item: step(),
+            onCompletedChanged: (value) => completed = value,
+            onEdit: () => edits++,
           ),
         ),
       ),
     );
-
+    expect(find.byType(Card), findsNothing);
+    expect(find.byType(Checkbox), findsNothing);
     expect(find.text('Stretch'), findsOneWidget);
-    expect(find.text('Take a gentle movement break.'), findsOneWidget);
     expect(find.text('5 min'), findsOneWidget);
-    expect(find.textContaining('Starts at '), findsOneWidget);
-    await tester.tap(find.byType(Checkbox));
-    await tester.pump();
+    expect(find.text('07:30'), findsOneWidget);
+    await tester.tap(find.byTooltip('Options for Stretch'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mark complete'));
+    await tester.pumpAndSettle();
     expect(completed, isTrue);
-    expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
-    await tester.tap(find.byType(Checkbox));
-    await tester.pump();
-    expect(completed, isFalse);
-    await tester.tap(find.byTooltip('Edit Stretch'));
+    await tester.tap(find.text('Stretch'));
     expect(edits, 1);
   });
-
   for (final storedTime in [
     '07:30',
     '07:30:15',
@@ -71,10 +65,7 @@ void main() {
           ),
         ),
       );
-      expect(
-        find.text('Starts at ${storedTime.substring(0, 5)}'),
-        findsOneWidget,
-      );
+      expect(find.text(storedTime.substring(0, 5)), findsOneWidget);
       expect(item.toMap(), equals(row));
       expect(tester.takeException(), isNull);
     });
@@ -92,7 +83,7 @@ void main() {
           home: Scaffold(body: RoutineItemCard(item: item)),
         ),
       );
-      expect(find.text('Start time unavailable'), findsOneWidget);
+      expect(find.text('—'), findsOneWidget);
       expect(find.text('5 min'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -116,7 +107,7 @@ void main() {
       expect(find.textContaining(' min'), findsNothing);
       expect(find.textContaining('Starts at '), findsNothing);
       expect(find.byType(IconButton), findsNothing);
-      expect(tester.widget<Checkbox>(find.byType(Checkbox)).onChanged, isNull);
+      expect(find.byType(Checkbox), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
