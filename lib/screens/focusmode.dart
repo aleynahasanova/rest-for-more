@@ -3,7 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../data/mock_blockable_apps.dart';
+import '../models/blockable_app.dart';
 import '../services/android_focus_notification.dart';
+import '../theme/app_colors.dart';
+import '../widgets/app_icon_badge.dart';
+import '../widgets/focus_primary_button.dart';
+import '../widgets/focus_screen_header.dart';
+import 'block_apps_selection_screen.dart';
 
 enum FocusTimerStatus { ready, running, paused, completed }
 
@@ -12,23 +19,27 @@ class FocusTimerController extends ChangeNotifier
   static const minimumDurationMinutes = 1;
   static const maximumDurationMinutes = 180;
 
-  static const durationOptions = <Duration>[
-    Duration(minutes: 5),
+  static const setupDurationOptions = <Duration>[
     Duration(minutes: 15),
-    Duration(minutes: 25),
+    Duration(minutes: 30),
     Duration(minutes: 45),
+    Duration(minutes: 60),
+    Duration(minutes: 120),
   ];
 
+  /// Kept for compatibility with existing timer logic.
+  static const durationOptions = setupDurationOptions;
+
   FocusTimerController({
-    AndroidFocusNotification notification =
+    this._notification =
         const AndroidFocusNotification(),
-  }) : _notification = notification {
+  }) {
     WidgetsBinding.instance.addObserver(this);
   }
 
   final AndroidFocusNotification _notification;
-  Duration _selectedDuration = durationOptions[2];
-  Duration _remaining = durationOptions[2];
+  Duration _selectedDuration = setupDurationOptions[2];
+  Duration _remaining = setupDurationOptions[2];
   DateTime? _finishingAt;
   Timer? _displayTimer;
   FocusTimerStatus _status = FocusTimerStatus.ready;
@@ -49,10 +60,22 @@ class FocusTimerController extends ChangeNotifier
 
   String get statusMessage => switch (_status) {
         FocusTimerStatus.ready => 'Set aside distractions and begin.',
-        FocusTimerStatus.running => 'Stay with the task in front of you.',
+        FocusTimerStatus.running =>
+          'Working and studying without distractions',
         FocusTimerStatus.paused => 'Your session is paused.',
         FocusTimerStatus.completed => 'You made time for what matters.',
       };
+
+  String get selectedDurationLabel {
+    final minutes = _selectedDuration.inMinutes;
+    if (minutes >= 60 && minutes % 60 == 0) {
+      final hours = minutes ~/ 60;
+      return hours == 1 ? '1 hour' : '$hours hours';
+    }
+    return '$minutes min';
+  }
+
+  String get startButtonLabel => 'Start $selectedDurationLabel';
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -160,7 +183,7 @@ class FocusTimerController extends ChangeNotifier
   }
 }
 
-class FocusModeScreen extends StatelessWidget {
+class FocusModeScreen extends StatefulWidget {
   const FocusModeScreen({
     required this.controller,
     super.key,
@@ -169,106 +192,140 @@ class FocusModeScreen extends StatelessWidget {
   final FocusTimerController controller;
 
   @override
+  State<FocusModeScreen> createState() => _FocusModeScreenState();
+}
+
+class _FocusModeScreenState extends State<FocusModeScreen> {
+  late Set<String> _selectedAppIds;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedAppIds = Set<String>.from(MockBlockableApps.defaultSelectedIds);
+  }
+
+  List<BlockableApp> get _selectedApps => MockBlockableApps.all
+      .where((app) => _selectedAppIds.contains(app.id))
+      .toList();
+
+  Future<void> _openAppSelection() async {
+    final result = await Navigator.of(context).push<Set<String>>(
+      MaterialPageRoute(
+        builder: (context) => BlockAppsSelectionScreen(
+          initialSelection: _selectedAppIds,
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() => _selectedAppIds = result);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: controller,
-      builder: (context, _) => _FocusTimerView(controller: controller),
+      listenable: widget.controller,
+      builder: (context, _) {
+        return switch (widget.controller.status) {
+          FocusTimerStatus.ready => _FocusSetupView(
+              controller: widget.controller,
+              selectedApps: _selectedApps,
+              selectedCount: _selectedAppIds.length,
+              onChangeApps: _openAppSelection,
+            ),
+          FocusTimerStatus.running || FocusTimerStatus.paused =>
+            _FocusActiveView(
+              controller: widget.controller,
+              pausedAppCount: _selectedAppIds.length,
+            ),
+          FocusTimerStatus.completed => _FocusCompletedView(
+              controller: widget.controller,
+            ),
+        };
+      },
     );
   }
 }
 
-class _FocusTimerView extends StatelessWidget {
-  const _FocusTimerView({required this.controller});
+class _FocusSetupView extends StatelessWidget {
+  const _FocusSetupView({
+    required this.controller,
+    required this.selectedApps,
+    required this.selectedCount,
+    required this.onChangeApps,
+  });
 
   final FocusTimerController controller;
+  final List<BlockableApp> selectedApps;
+  final int selectedCount;
+  final VoidCallback onChangeApps;
 
   @override
   Widget build(BuildContext context) {
-    final isReady = controller.status == FocusTimerStatus.ready;
-    final isCustomDuration = !FocusTimerController.durationOptions.contains(
+    final isCustomDuration =
+        !FocusTimerController.setupDurationOptions.contains(
       controller.selectedDuration,
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Focus Mode')),
+      backgroundColor: AppColors.surface,
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final minimumContentHeight = constraints.maxHeight > 48
-                ? constraints.maxHeight - 48
-                : 0.0;
-
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: minimumContentHeight,
-                ),
-                child: IntrinsicHeight(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Spacer(),
-                      Text(
-                        controller.status == FocusTimerStatus.completed
-                            ? 'Focus session complete'
-                            : controller.formattedRemaining,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.displayLarge,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        controller.statusMessage,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                      const SizedBox(height: 32),
-                      if (isReady) ...[
-                        const Text(
-                          'Choose a duration',
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          alignment: WrapAlignment.center,
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            for (final duration
-                                in FocusTimerController.durationOptions)
-                              ChoiceChip(
-                                label: Text('${duration.inMinutes} min'),
-                                selected:
-                                    duration == controller.selectedDuration,
-                                onSelected: (_) =>
-                                    controller.selectDuration(duration),
-                              ),
-                            ChoiceChip(
-                              avatar: const Icon(
-                                Icons.edit_outlined,
-                                size: 18,
-                              ),
-                              label: Text(
-                                isCustomDuration
-                                    ? 'Custom '
-                                        '(${controller.selectedDuration.inMinutes} min)'
-                                    : 'Custom',
-                              ),
-                              selected: isCustomDuration,
-                              onSelected: (_) =>
-                                  _chooseCustomDuration(context),
-                            ),
-                          ],
-                        ),
-                      ],
-                      const Spacer(),
-                      ..._buildActions(),
-                    ],
-                  ),
-                ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const FocusScreenHeader(),
+              const SizedBox(height: 32),
+              Text(
+                'How long do you want to focus?',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontFamily: 'Georgia',
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.ink,
+                      height: 1.2,
+                    ),
               ),
-            );
-          },
+              const SizedBox(height: 8),
+              Text(
+                'You can always pause or stop along the way.',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: AppColors.ink.withValues(alpha: 0.65),
+                    ),
+              ),
+              const SizedBox(height: 28),
+              _DurationGrid(controller: controller),
+              const SizedBox(height: 12),
+              _CustomTimeRow(
+                isCustom: isCustomDuration,
+                customLabel: isCustomDuration
+                    ? controller.selectedDurationLabel
+                    : null,
+                onTap: () => _chooseCustomDuration(context),
+              ),
+              const SizedBox(height: 28),
+              Text(
+                'APPS TO PAUSE',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: AppColors.ink.withValues(alpha: 0.45),
+                      letterSpacing: 1.2,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const SizedBox(height: 10),
+              _AppsToPauseCard(
+                selectedApps: selectedApps,
+                selectedCount: selectedCount,
+                onChange: onChangeApps,
+              ),
+              const Spacer(),
+              FocusPrimaryButton(
+                label: controller.startButtonLabel,
+                onPressed: selectedCount > 0 ? controller.startSession : null,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -282,11 +339,8 @@ class _FocusTimerView extends StatelessWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         scrollable: true,
-        insetPadding: const EdgeInsets.symmetric(
-          horizontal: 24,
-          vertical: 24,
-        ),
-        title: const Text('Custom duration'),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        title: const Text('Custom time'),
         content: Form(
           key: formKey,
           child: TextFormField(
@@ -306,10 +360,8 @@ class _FocusTimerView extends StatelessWidget {
               if (parsedMinutes == null) {
                 return 'Enter a number of minutes.';
               }
-              if (parsedMinutes <
-                      FocusTimerController.minimumDurationMinutes ||
-                  parsedMinutes >
-                      FocusTimerController.maximumDurationMinutes) {
+              if (parsedMinutes < FocusTimerController.minimumDurationMinutes ||
+                  parsedMinutes > FocusTimerController.maximumDurationMinutes) {
                 return 'Enter a value from 1 to 180.';
               }
               return null;
@@ -324,9 +376,7 @@ class _FocusTimerView extends StatelessWidget {
           FilledButton(
             onPressed: () {
               if (formKey.currentState?.validate() ?? false) {
-                Navigator.of(dialogContext).pop(
-                  int.parse(enteredMinutes),
-                );
+                Navigator.of(dialogContext).pop(int.parse(enteredMinutes));
               }
             },
             child: const Text('Set duration'),
@@ -339,46 +389,379 @@ class _FocusTimerView extends StatelessWidget {
       controller.selectDuration(Duration(minutes: minutes));
     }
   }
+}
 
-  List<Widget> _buildActions() {
-    return switch (controller.status) {
-      FocusTimerStatus.ready => [
-          FilledButton.icon(
-            onPressed: controller.startSession,
-            icon: const Icon(Icons.play_arrow_rounded),
-            label: const Text('Start session'),
+class _DurationGrid extends StatelessWidget {
+  const _DurationGrid({required this.controller});
+
+  final FocusTimerController controller;
+
+  String _labelFor(Duration duration) {
+    final minutes = duration.inMinutes;
+    if (minutes >= 60 && minutes % 60 == 0) {
+      final hours = minutes ~/ 60;
+      return hours == 1 ? '1 hour' : '$hours hours';
+    }
+    return '$minutes min';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        for (final duration in FocusTimerController.setupDurationOptions)
+          _DurationPill(
+            label: _labelFor(duration),
+            isSelected: duration == controller.selectedDuration,
+            onTap: () => controller.selectDuration(duration),
+          ),
+      ],
+    );
+  }
+}
+
+class _DurationPill extends StatelessWidget {
+  const _DurationPill({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: isSelected ? AppColors.ink : AppColors.surfaceMuted,
+      borderRadius: BorderRadius.circular(24),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              color: isSelected ? AppColors.surface : AppColors.ink,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CustomTimeRow extends StatelessWidget {
+  const _CustomTimeRow({
+    required this.isCustom,
+    required this.onTap,
+    this.customLabel,
+  });
+
+  final bool isCustom;
+  final String? customLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surfaceMuted,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          child: Row(
+            children: [
+              Icon(
+                Icons.tune_rounded,
+                size: 22,
+                color: AppColors.ink.withValues(alpha: 0.7),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  isCustom && customLabel != null
+                      ? 'Custom time ($customLabel)'
+                      : 'Custom time',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.ink,
+                      ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: AppColors.ink.withValues(alpha: 0.5),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AppsToPauseCard extends StatelessWidget {
+  const _AppsToPauseCard({
+    required this.selectedApps,
+    required this.selectedCount,
+    required this.onChange,
+  });
+
+  final List<BlockableApp> selectedApps;
+  final int selectedCount;
+  final VoidCallback onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surfaceMuted,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onChange,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          child: Row(
+            children: [
+              if (selectedApps.isEmpty)
+                Text(
+                  'No apps selected',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: AppColors.ink.withValues(alpha: 0.65),
+                      ),
+                )
+              else
+                SizedBox(
+                  height: 36,
+                  width: selectedApps.length > 3 ? 96 : 36.0 * selectedApps.length,
+                  child: Stack(
+                    children: [
+                      for (var i = 0; i < selectedApps.length && i < 3; i++)
+                        Positioned(
+                          left: i * 22.0,
+                          child: AppIconBadge(app: selectedApps[i]),
+                        ),
+                    ],
+                  ),
+                ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  selectedCount == 1
+                      ? '1 app selected'
+                      : '$selectedCount apps selected',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.ink,
+                      ),
+                ),
+              ),
+              TextButton(
+                onPressed: onChange,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.ink,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+                child: const Text('Change'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FocusActiveView extends StatelessWidget {
+  const _FocusActiveView({
+    required this.controller,
+    required this.pausedAppCount,
+  });
+
+  final FocusTimerController controller;
+  final int pausedAppCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final isPaused = controller.status == FocusTimerStatus.paused;
+
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              FocusScreenHeader(
+                trailing: Text(
+                  'of ${controller.selectedDurationLabel}',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.ink.withValues(alpha: 0.55),
+                      ),
+                ),
+              ),
+              const Spacer(),
+              _TimerDisplay(time: controller.formattedRemaining),
+              const SizedBox(height: 20),
+              Text(
+                controller.statusMessage,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: AppColors.ink.withValues(alpha: 0.7),
+                    ),
+              ),
+              const SizedBox(height: 16),
+              Center(
+                child: _PausedAppsBadge(count: pausedAppCount),
+              ),
+              const Spacer(),
+              FocusPrimaryButton(
+                label: isPaused ? 'Resume' : 'Pause',
+                onPressed:
+                    isPaused ? controller.resumeSession : controller.pauseSession,
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: controller.cancelSession,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.ink,
+                ),
+                child: const Text('Stop'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TimerDisplay extends StatelessWidget {
+  const _TimerDisplay({required this.time});
+
+  final String time;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 260,
+        height: 260,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: AppColors.ink.withValues(alpha: 0.15),
+            width: 2,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          time,
+          style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                fontFamily: 'Georgia',
+                fontWeight: FontWeight.w300,
+                fontSize: 56,
+                letterSpacing: 1,
+                color: AppColors.ink,
+              ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PausedAppsBadge extends StatelessWidget {
+  const _PausedAppsBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = count == 1 ? '1 app paused' : '$count apps paused';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.timer_outlined,
+            size: 18,
+            color: AppColors.ink.withValues(alpha: 0.6),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.ink.withValues(alpha: 0.75),
+                  fontWeight: FontWeight.w500,
+                ),
           ),
         ],
-      FocusTimerStatus.running => [
-          FilledButton.icon(
-            onPressed: controller.pauseSession,
-            icon: const Icon(Icons.pause_rounded),
-            label: const Text('Pause'),
+      ),
+    );
+  }
+}
+
+class _FocusCompletedView extends StatelessWidget {
+  const _FocusCompletedView({required this.controller});
+
+  final FocusTimerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const FocusScreenHeader(),
+              const Spacer(),
+              Text(
+                'Focus session complete',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontFamily: 'Georgia',
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.ink,
+                    ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                controller.statusMessage,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: AppColors.ink.withValues(alpha: 0.65),
+                    ),
+              ),
+              const Spacer(),
+              FocusPrimaryButton(
+                label: 'Start another session',
+                onPressed: controller.cancelSession,
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          TextButton(
-            onPressed: controller.cancelSession,
-            child: const Text('Cancel'),
-          ),
-        ],
-      FocusTimerStatus.paused => [
-          FilledButton.icon(
-            onPressed: controller.resumeSession,
-            icon: const Icon(Icons.play_arrow_rounded),
-            label: const Text('Resume'),
-          ),
-          const SizedBox(height: 12),
-          TextButton(
-            onPressed: controller.cancelSession,
-            child: const Text('Cancel'),
-          ),
-        ],
-      FocusTimerStatus.completed => [
-          FilledButton(
-            onPressed: controller.cancelSession,
-            child: const Text('Start another session'),
-          ),
-        ],
-    };
+        ),
+      ),
+    );
   }
 }
