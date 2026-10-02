@@ -6,7 +6,6 @@ import '../theme/app_colors.dart';
 import '../widgets/app_icon_badge.dart';
 import '../widgets/focus_primary_button.dart';
 import '../widgets/focus_screen_header.dart';
-import '../services/app_block_service.dart';
 
 class BlockAppsSelectionScreen extends StatefulWidget {
   const BlockAppsSelectionScreen({required this.initialSelection, super.key});
@@ -81,31 +80,9 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              TextButton(
-                onPressed: () async {
-                  await AppBlockService.openAccessibilitySettings();
-                },
-                child: const Text('Enable app blocking'),
-                // I want to add if the accessibility is enabled, the button should hidden (get feedback and help from teachers)
-              ),
-
-              const SizedBox(height: 8),
-
               FocusPrimaryButton(
                 label: 'Save selection',
-                onPressed: () async {
-                  final packageNames = MockBlockableApps.all
-                      .where((app) => _selectedIds.contains(app.id))
-                      .map((app) => app.packageName)
-                      .toList();
-
-                  await AppBlockService.setBlockedApps(packageNames);
-                  await AppBlockService.startBlocking();
-
-                  if (!context.mounted) return;
-
-                  Navigator.of(context).pop(_selectedIds);
-                },
+                onPressed: () => Navigator.of(context).pop(_selectedIds),
               ),
             ],
           ),

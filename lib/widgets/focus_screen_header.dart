@@ -5,10 +5,12 @@ import '../theme/app_colors.dart';
 class FocusScreenHeader extends StatelessWidget {
   const FocusScreenHeader({
     this.trailing,
+    this.onBack,
     super.key,
   });
 
   final Widget? trailing;
+  final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) {
@@ -16,7 +18,7 @@ class FocusScreenHeader extends StatelessWidget {
       children: [
         _CircleIconButton(
           icon: Icons.arrow_back,
-          onPressed: () => Navigator.of(context).maybePop(),
+          onPressed: onBack ?? () => Navigator.of(context).maybePop(),
         ),
         const SizedBox(width: 12),
         Text(

@@ -6,11 +6,14 @@ import 'package:flutter/services.dart';
 import '../data/mock_blockable_apps.dart';
 import '../models/blockable_app.dart';
 import '../services/android_focus_notification.dart';
+import '../services/app_block_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_icon_badge.dart';
 import '../widgets/focus_primary_button.dart';
 import '../widgets/focus_screen_header.dart';
 import 'block_apps_selection_screen.dart';
+import 'blocking_permissions_screen.dart';
+import 'session_blocked_apps_screen.dart';
 
 enum FocusTimerStatus { ready, running, paused, completed }
 
@@ -197,11 +200,29 @@ class FocusModeScreen extends StatefulWidget {
 
 class _FocusModeScreenState extends State<FocusModeScreen> {
   late Set<String> _selectedAppIds;
+  final Map<String, DateTime> _temporaryUnblocks = {};
+  final Map<String, Timer> _relockTimers = {};
 
   @override
   void initState() {
     super.initState();
     _selectedAppIds = Set<String>.from(MockBlockableApps.defaultSelectedIds);
+    widget.controller.addListener(_onTimerChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onTimerChanged);
+    for (final timer in _relockTimers.values) {
+      timer.cancel();
+    }
+    super.dispose();
+  }
+
+  void _onTimerChanged() {
+    if (widget.controller.status == FocusTimerStatus.completed) {
+      unawaited(_stopBlocking());
+    }
   }
 
   List<BlockableApp> get _selectedApps => MockBlockableApps.all
@@ -222,6 +243,84 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
     }
   }
 
+  Future<void> _startFocus() async {
+    final accessibilityEnabled =
+        await AppBlockService.isAccessibilityEnabled();
+    if (!mounted) return;
+
+    if (!accessibilityEnabled) {
+      final granted = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (context) => const BlockingPermissionsScreen(),
+        ),
+      );
+      if (granted != true || !mounted) {
+        return;
+      }
+    }
+
+    await AppBlockService.setBlockedApps(
+      _selectedApps.map((app) => app.packageName).toList(),
+    );
+    await AppBlockService.startBlocking();
+    widget.controller.startSession();
+  }
+
+  Future<void> _stopFocus() async {
+    await _stopBlocking();
+    widget.controller.cancelSession();
+  }
+
+  Future<void> _stopBlocking() async {
+    for (final timer in _relockTimers.values) {
+      timer.cancel();
+    }
+    _relockTimers.clear();
+
+    for (final packageName in _temporaryUnblocks.keys) {
+      await AppBlockService.clearTemporaryUnblock(packageName);
+    }
+    _temporaryUnblocks.clear();
+    await AppBlockService.stopBlocking();
+  }
+
+  void _scheduleRelock(String packageName, DateTime until) {
+    _relockTimers[packageName]?.cancel();
+    final delay = until.difference(DateTime.now());
+    if (delay.isNegative) {
+      return;
+    }
+
+    _relockTimers[packageName] = Timer(delay, () async {
+      await AppBlockService.clearTemporaryUnblock(packageName);
+      if (!mounted) return;
+      setState(() => _temporaryUnblocks.remove(packageName));
+    });
+  }
+
+  Future<void> _openBlockedAppsManager() async {
+    final result = await Navigator.of(context).push<Map<String, DateTime>>(
+      MaterialPageRoute(
+        builder: (context) => SessionBlockedAppsScreen(
+          apps: _selectedApps,
+          activeUnblocks: _temporaryUnblocks,
+        ),
+      ),
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _temporaryUnblocks
+        ..clear()
+        ..addAll(result);
+    });
+    for (final entry in result.entries) {
+      _scheduleRelock(entry.key, entry.value);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -233,11 +332,14 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
               selectedApps: _selectedApps,
               selectedCount: _selectedAppIds.length,
               onChangeApps: _openAppSelection,
+              onStart: _startFocus,
             ),
           FocusTimerStatus.running || FocusTimerStatus.paused =>
             _FocusActiveView(
               controller: widget.controller,
               pausedAppCount: _selectedAppIds.length,
+              onStop: _stopFocus,
+              onManageApps: _openBlockedAppsManager,
             ),
           FocusTimerStatus.completed => _FocusCompletedView(
               controller: widget.controller,
@@ -254,12 +356,14 @@ class _FocusSetupView extends StatelessWidget {
     required this.selectedApps,
     required this.selectedCount,
     required this.onChangeApps,
+    required this.onStart,
   });
 
   final FocusTimerController controller;
   final List<BlockableApp> selectedApps;
   final int selectedCount;
   final VoidCallback onChangeApps;
+  final VoidCallback onStart;
 
   @override
   Widget build(BuildContext context) {
@@ -322,7 +426,7 @@ class _FocusSetupView extends StatelessWidget {
               const Spacer(),
               FocusPrimaryButton(
                 label: controller.startButtonLabel,
-                onPressed: selectedCount > 0 ? controller.startSession : null,
+                onPressed: selectedCount > 0 ? onStart : null,
               ),
             ],
           ),
@@ -587,10 +691,14 @@ class _FocusActiveView extends StatelessWidget {
   const _FocusActiveView({
     required this.controller,
     required this.pausedAppCount,
+    required this.onStop,
+    required this.onManageApps,
   });
 
   final FocusTimerController controller;
   final int pausedAppCount;
+  final VoidCallback onStop;
+  final VoidCallback onManageApps;
 
   @override
   Widget build(BuildContext context) {
@@ -624,7 +732,10 @@ class _FocusActiveView extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Center(
-                child: _PausedAppsBadge(count: pausedAppCount),
+                child: _PausedAppsBadge(
+                  count: pausedAppCount,
+                  onTap: onManageApps,
+                ),
               ),
               const Spacer(),
               FocusPrimaryButton(
@@ -634,7 +745,7 @@ class _FocusActiveView extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               TextButton(
-                onPressed: controller.cancelSession,
+                onPressed: onStop,
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.ink,
                 ),
@@ -683,37 +794,45 @@ class _TimerDisplay extends StatelessWidget {
 }
 
 class _PausedAppsBadge extends StatelessWidget {
-  const _PausedAppsBadge({required this.count});
+  const _PausedAppsBadge({
+    required this.count,
+    required this.onTap,
+  });
 
   final int count;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final label = count == 1 ? '1 app paused' : '$count apps paused';
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.timer_outlined,
-            size: 18,
-            color: AppColors.ink.withValues(alpha: 0.6),
+    return Material(
+      color: AppColors.surfaceMuted,
+      borderRadius: BorderRadius.circular(24),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.timer_outlined,
+                size: 18,
+                color: AppColors.ink.withValues(alpha: 0.6),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.ink.withValues(alpha: 0.75),
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.ink.withValues(alpha: 0.75),
-                  fontWeight: FontWeight.w500,
-                ),
-          ),
-        ],
+        ),
       ),
     );
   }
