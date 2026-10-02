@@ -20,4 +20,25 @@ class AppBlockService {
   static Future<void> openAccessibilitySettings() async {
     await _channel.invokeMethod('openAccessibilitySettings');
   }
+
+  static Future<bool> isAccessibilityEnabled() async {
+    final enabled = await _channel.invokeMethod<bool>('isAccessibilityEnabled');
+    return enabled ?? false;
+  }
+
+  static Future<void> setTemporaryUnblock({
+    required String packageName,
+    required DateTime until,
+  }) async {
+    await _channel.invokeMethod('setTemporaryUnblock', {
+      'packageName': packageName,
+      'untilEpochMs': until.millisecondsSinceEpoch,
+    });
+  }
+
+  static Future<void> clearTemporaryUnblock(String packageName) async {
+    await _channel.invokeMethod('clearTemporaryUnblock', {
+      'packageName': packageName,
+    });
+  }
 }
