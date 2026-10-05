@@ -7,6 +7,15 @@ class OnboardingProfile {
   final String? phoneUseInBed;
   final int? phoneFreeTargetMinutes;
   final String? reminderTime;
+
+  final String? rhythm;
+  final String? restMoments;
+  final String? feasibleStep;
+  final String? preferredActivity;
+  final String? customActivity;
+  final String? productOwnership;
+  final int? onboardingStep;
+
   final String productExpectation;
   final String? productIssue;
   final bool wantsSupport;
@@ -23,7 +32,14 @@ class OnboardingProfile {
     this.phoneUseInBed,
     this.phoneFreeTargetMinutes,
     this.reminderTime,
-    required this.productExpectation,
+    this.rhythm,
+    this.restMoments,
+    this.feasibleStep,
+    this.preferredActivity,
+    this.customActivity,
+    this.productOwnership,
+    this.onboardingStep,
+    this.productExpectation = 'UNKNOWN',
     this.productIssue,
     this.wantsSupport = false,
     this.completedAt,
@@ -41,6 +57,13 @@ class OnboardingProfile {
       'phone_use_in_bed': phoneUseInBed,
       'phone_free_target_minutes': phoneFreeTargetMinutes,
       'reminder_time': reminderTime,
+      'rhythm': rhythm,
+      'rest_moments': restMoments,
+      'feasible_step': feasibleStep,
+      'preferred_activity': preferredActivity,
+      'custom_activity': customActivity,
+      'product_ownership': productOwnership,
+      'onboarding_step': onboardingStep,
       'product_expectation': productExpectation,
       'product_issue': productIssue,
       'wants_support': wantsSupport ? 1 : 0,
@@ -60,6 +83,13 @@ class OnboardingProfile {
       phoneUseInBed: map['phone_use_in_bed'] as String?,
       phoneFreeTargetMinutes: map['phone_free_target_minutes'] as int?,
       reminderTime: map['reminder_time'] as String?,
+      rhythm: map['rhythm'] as String?,
+      restMoments: map['rest_moments'] as String?,
+      feasibleStep: map['feasible_step'] as String?,
+      preferredActivity: map['preferred_activity'] as String?,
+      customActivity: map['custom_activity'] as String?,
+      productOwnership: map['product_ownership'] as String?,
+      onboardingStep: map['onboarding_step'] as int?,
       productExpectation: map['product_expectation'] as String,
       productIssue: map['product_issue'] as String?,
       wantsSupport: (map['wants_support'] as int) == 1,
