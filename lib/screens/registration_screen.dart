@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../services/fake_auth_service.dart';
+import '../models/user.dart';
+import '../services/user_service.dart';
 import '../theme/app_colors.dart';
 
 class RegistrationScreen extends StatefulWidget {
@@ -13,6 +14,8 @@ class RegistrationScreen extends StatefulWidget {
 class _RegistrationScreenState extends State<RegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
 
+  final UserService _userService = UserService();
+
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -21,6 +24,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   bool _showPassword = false;
   bool _showConfirmPassword = false;
   bool _registrationSuccessful = false;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -53,10 +57,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
     if (!emailPattern.hasMatch(email)) {
       return 'Please enter a valid email address.';
-    }
-
-    if (FakeAuthService.emailExists(email)) {
-      return 'An account with this email already exists.';
     }
 
     return null;
@@ -98,7 +98,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     return null;
   }
 
-  void _createAccount() {
+  Future<void> _createAccount() async {
     FocusScope.of(context).unfocus();
 
     final isValid = _formKey.currentState?.validate() ?? false;
@@ -107,30 +107,86 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       return;
     }
 
-    final wasCreated = FakeAuthService.register(
-      email: _emailController.text,
-      password: _passwordController.text,
-    );
-
-    if (!wasCreated) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('This email is already registered.'),
-        ),
-      );
-
-      return;
-    }
-
     setState(() {
-      _registrationSuccessful = true;
+      _isLoading = true;
+      _registrationSuccessful = false;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Account created successfully!'),
-      ),
-    );
+    final fullName = _nameController.text.trim();
+    final email = _emailController.text.trim().toLowerCase();
+    final password = _passwordController.text;
+
+    try {
+      // Check if the email already exists in the SQLite database.
+      final existingUser = await _userService.getUserByEmail(email);
+
+      if (!mounted) {
+        return;
+      }
+
+      if (existingUser != null) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'An account with this email already exists.',
+            ),
+          ),
+        );
+
+        return;
+      }
+
+      // Create a new user that matches the User model
+      // created by the database implementation.
+      final newUser = User(
+        userId: DateTime.now().microsecondsSinceEpoch.toString(),
+        email: email,
+        passwordHash: password,
+        firstName: fullName,
+        username: email,
+        createdAt: DateTime.now(),
+      );
+
+      // Save the account in SQLite.
+      await _userService.createUser(newUser);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _registrationSuccessful = true;
+        _isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Account created successfully!',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Something went wrong while creating the account.',
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -204,7 +260,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   decoration: InputDecoration(
                     labelText: 'Password',
                     hintText: 'Enter your password',
-                    prefixIcon: const Icon(Icons.lock_outline),
+                    prefixIcon: const Icon(
+                      Icons.lock_outline,
+                    ),
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       onPressed: () {
@@ -239,7 +297,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   decoration: InputDecoration(
                     labelText: 'Confirm password',
                     hintText: 'Enter your password again',
-                    prefixIcon: const Icon(Icons.lock_outline),
+                    prefixIcon: const Icon(
+                      Icons.lock_outline,
+                    ),
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       onPressed: () {
@@ -264,19 +324,31 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 const SizedBox(height: 24),
 
                 FilledButton(
-                  onPressed: _createAccount,
+                  onPressed: _isLoading
+                      ? null
+                      : () {
+                          _createAccount();
+                        },
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
                       vertical: 16,
                     ),
                   ),
-                  child: const Text(
-                    'Create Account',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'Create Account',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
 
                 if (_registrationSuccessful) ...[
@@ -310,12 +382,16 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('Already have an account?'),
+                    const Text(
+                      'Already have an account?',
+                    ),
                     TextButton(
                       onPressed: () {
                         Navigator.of(context).pop();
                       },
-                      child: const Text('Log in'),
+                      child: const Text(
+                        'Log in',
+                      ),
                     ),
                   ],
                 ),
