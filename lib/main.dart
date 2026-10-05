@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'database/app_database.dart';
+import 'controllers/morning_routine_session.dart';
 
 import 'screens/focusmode.dart';
 import 'screens/morningroutine.dart';
@@ -21,16 +22,19 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   late final FocusTimerController _focusTimerController;
+  late final MorningRoutineSession _morningSession;
 
   @override
   void initState() {
     super.initState();
     _focusTimerController = FocusTimerController();
+    _morningSession = MorningRoutineSession();
   }
 
   @override
   void dispose() {
     _focusTimerController.dispose();
+    _morningSession.dispose();
     super.dispose();
   }
 
@@ -40,13 +44,21 @@ class _MyAppState extends State<MyApp> {
       title: 'Focus Mode',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      home: MyHomePage(focusTimerController: _focusTimerController),
+      home: MyHomePage(
+        focusTimerController: _focusTimerController,
+        morningSession: _morningSession,
+      ),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({required this.focusTimerController, super.key});
+  const MyHomePage({
+    required this.focusTimerController,
+    required this.morningSession,
+    super.key,
+  });
+  final MorningRoutineSession morningSession;
 
   final FocusTimerController focusTimerController;
 
@@ -83,7 +95,8 @@ class _MyHomePageState extends State<MyHomePage> {
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (context) => const MorningRoutineScreen(),
+                    builder: (context) =>
+                        MorningRoutineScreen(session: widget.morningSession),
                   ),
                 );
               },

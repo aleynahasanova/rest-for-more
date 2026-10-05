@@ -4,6 +4,8 @@ import '../components/routine_item.dart';
 import '../models/routine.dart';
 import '../models/routine_item.dart';
 import '../services/routine_service.dart';
+import 'morning_run_screen.dart';
+import '../controllers/morning_routine_session.dart';
 
 class MorningRoutineScreen extends StatefulWidget {
   /// Starter content owned by the morning routine, seeded only on creation.
@@ -15,7 +17,13 @@ class MorningRoutineScreen extends StatefulWidget {
     ('Plan your day', 'Choose what matters most today.', 5),
   ];
 
-  const MorningRoutineScreen({this.service, this.userId, super.key});
+  const MorningRoutineScreen({
+    this.service,
+    this.userId,
+    this.session,
+    super.key,
+  });
+  final MorningRoutineSession? session;
   final RoutineService? service;
   final String? userId;
   @override
@@ -28,13 +36,34 @@ class _MorningRoutineScreenState extends State<MorningRoutineScreen> {
   List<RoutineItem> _items = [];
   final Set<String> _completed = {};
   bool _loading = true;
+  late final MorningRoutineSession _session;
   bool _saving = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    _session = widget.session ?? MorningRoutineSession();
+    _session.addListener(_sessionChanged);
     _load();
+  }
+
+  void _sessionChanged() {
+    if (!mounted) return;
+    setState(() {
+      final run = _session.run;
+      if (run != null) {
+        _completed.clear();
+        _completed.addAll(run.completedIds);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _session.removeListener(_sessionChanged);
+    if (widget.session == null) _session.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -100,6 +129,33 @@ class _MorningRoutineScreenState extends State<MorningRoutineScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _startRoutine() async {
+    if (!_session.isActive &&
+        _items.any((item) => (item.durationMinutes ?? 0) <= 0)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Set a duration of at least 1 minute for every step before starting.',
+          ),
+        ),
+      );
+      return;
+    }
+    final run = _session.startOrContinue(_items);
+    final completed = await Navigator.of(context).push<Set<String>>(
+      MaterialPageRoute(
+        builder: (_) =>
+            MorningRunScreen(controller: run, iconFor: _morningActivityIcon),
+      ),
+    );
+    if (mounted && completed != null) {
+      setState(() {
+        _completed.clear();
+        _completed.addAll(completed);
+      });
+    }
   }
 
   // Preview starts at 07:00, as in the prototype. Explicit stored times win.
@@ -190,6 +246,19 @@ class _MorningRoutineScreenState extends State<MorningRoutineScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Morning routine')),
+    bottomNavigationBar: SafeArea(
+      minimum: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      child: FilledButton(
+        onPressed:
+            !_session.isActive &&
+                (_loading || _saving || _error != null || _items.isEmpty)
+            ? null
+            : _startRoutine,
+        child: Text(
+          _session.isActive ? 'Continue your morning' : 'Start your morning',
+        ),
+      ),
+    ),
     body: SafeArea(
       child: _loading
           ? const Center(child: CircularProgressIndicator())

@@ -55,6 +55,9 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
   fonts:
+    - family: CormorantGaramond
+      fonts:
+        - asset: assets/fonts/CormorantGaramond.ttf
     - family: Montserrat
       fonts:
         - asset: assets/fonts/Montserrat.ttf

@@ -18,10 +18,12 @@ class MainActivity : FlutterActivity() {
             "com.example.rest_for_more/focus_notification"
         private const val NOTIFICATION_CHANNEL_ID = "focus_timer"
         private const val NOTIFICATION_ID = 1001
+        private const val ROUTINE_NOTIFICATION_ID = 1003
         private const val NOTIFICATION_PERMISSION_REQUEST = 1002
     }
 
-    private var pendingFinishingAt: Long? = null
+    private val pendingTimers = mutableMapOf<Boolean, Long>()
+    private var permissionRequestPending = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -31,7 +33,7 @@ class MainActivity : FlutterActivity() {
             METHOD_CHANNEL,
         ).setMethodCallHandler { call, result ->
             when (call.method) {
-                "showFocusTimer" -> {
+                "showFocusTimer", "showRoutineTimer" -> {
                     val finishingAt =
                         call.argument<Number>("finishingAtMilliseconds")?.toLong()
 
@@ -42,14 +44,20 @@ class MainActivity : FlutterActivity() {
                             null,
                         )
                     } else {
-                        showFocusTimerWhenAllowed(finishingAt)
+                        showFocusTimerWhenAllowed(finishingAt, call.method == "showRoutineTimer")
                         result.success(null)
                     }
                 }
 
                 "hideFocusTimer" -> {
-                    pendingFinishingAt = null
+                    pendingTimers.remove(false)
                     notificationManager().cancel(NOTIFICATION_ID)
+                    result.success(null)
+                }
+
+                "hideRoutineTimer" -> {
+                    pendingTimers.remove(true)
+                    notificationManager().cancel(ROUTINE_NOTIFICATION_ID)
                     result.success(null)
                 }
 
@@ -58,28 +66,33 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun showFocusTimerWhenAllowed(finishingAt: Long) {
+    private fun showFocusTimerWhenAllowed(finishingAt: Long, routine: Boolean = false) {
         if (
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
                 PackageManager.PERMISSION_GRANTED
         ) {
-            pendingFinishingAt = finishingAt
-            requestPermissions(
-                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                NOTIFICATION_PERMISSION_REQUEST,
-            )
+            pendingTimers[routine] = finishingAt
+            if (!permissionRequestPending) {
+                permissionRequestPending = true
+                requestPermissions(
+                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                    NOTIFICATION_PERMISSION_REQUEST,
+                )
+            }
             return
         }
 
-        showFocusTimer(finishingAt)
+        showFocusTimer(finishingAt, routine)
     }
 
-    private fun showFocusTimer(finishingAt: Long) {
+    private fun showFocusTimer(finishingAt: Long, routine: Boolean = false) {
+        if (finishingAt <= System.currentTimeMillis()) return
         val remainingMilliseconds =
             (finishingAt - System.currentTimeMillis()).coerceAtLeast(1L)
 
-        createNotificationChannel()
+        val channelId = if (routine) "routine_timer" else NOTIFICATION_CHANNEL_ID
+        createNotificationChannel(routine)
 
         val openAppIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -92,7 +105,7 @@ class MainActivity : FlutterActivity() {
         )
 
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
+            Notification.Builder(this, channelId)
         } else {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
@@ -100,8 +113,8 @@ class MainActivity : FlutterActivity() {
 
         builder
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle("Focus Mode")
-            .setContentText("Stay with the task in front of you.")
+            .setContentTitle(if (routine) "Morning routine" else "Focus Mode")
+            .setContentText(if (routine) "Time remaining in your morning routine." else "Stay with the task in front of you.")
             .setContentIntent(openAppPendingIntent)
             .setCategory(Notification.CATEGORY_STOPWATCH)
             .setWhen(finishingAt)
@@ -123,18 +136,18 @@ class MainActivity : FlutterActivity() {
             builder.extras.putBoolean("android.requestPromotedOngoing", true)
         }
 
-        notificationManager().notify(NOTIFICATION_ID, builder.build())
+        notificationManager().notify(if (routine) ROUTINE_NOTIFICATION_ID else NOTIFICATION_ID, builder.build())
     }
 
-    private fun createNotificationChannel() {
+    private fun createNotificationChannel(routine: Boolean = false) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
 
         val channel = NotificationChannel(
-            NOTIFICATION_CHANNEL_ID,
-            "Focus timer",
+            if (routine) "routine_timer" else NOTIFICATION_CHANNEL_ID,
+            if (routine) "Routine timer" else "Focus timer",
             NotificationManager.IMPORTANCE_LOW,
         ).apply {
-            description = "Displays the remaining time for an active focus session."
+            description = if (routine) "Displays the remaining time for an active routine." else "Displays the remaining time for an active focus session."
             setSound(null, null)
             enableVibration(false)
         }
@@ -153,13 +166,13 @@ class MainActivity : FlutterActivity() {
 
         if (requestCode != NOTIFICATION_PERMISSION_REQUEST) return
 
-        val finishingAt = pendingFinishingAt
-        pendingFinishingAt = null
+        permissionRequestPending = false
+        val timers = pendingTimers.toMap()
+        pendingTimers.clear()
         if (
-            grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED &&
-            finishingAt != null
+            grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
         ) {
-            showFocusTimer(finishingAt)
+            timers.forEach { (routine, finishingAt) -> showFocusTimer(finishingAt, routine) }
         }
     }
 }
