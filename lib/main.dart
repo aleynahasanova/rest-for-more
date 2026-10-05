@@ -5,6 +5,7 @@ import 'controllers/morning_routine_session.dart';
 
 import 'screens/focusmode.dart';
 import 'screens/morningroutine.dart';
+import 'screens/registration_screen.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -102,6 +103,17 @@ class _MyHomePageState extends State<MyHomePage> {
               },
               icon: const Icon(Icons.wb_sunny_outlined),
               label: const Text('Morning routine'),
+
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (context) => const RegistrationScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.person_add_outlined),
+              label: const Text('Create Account'),
             ),
           ],
         ),
