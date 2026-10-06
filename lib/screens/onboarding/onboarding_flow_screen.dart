@@ -70,7 +70,7 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen> {
             // answers filled in, so they can be changed.
             _step = 1;
           } else {
-            _step = existing.onboardingStep;
+            _step = existing.onboardingStep ?? 0;
             if (_step > _lastStep) _step = _lastStep;
             if (_step < 0) _step = 0;
           }
