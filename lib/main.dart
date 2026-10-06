@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'database/app_database.dart';
 
 import 'screens/focusmode.dart';
+import 'screens/onboarding/onboarding_flow_screen.dart';
 import 'screens/registration_screen.dart';
 import 'theme/app_theme.dart';
+
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -91,9 +93,25 @@ class _MyHomePageState extends State<MyHomePage> {
               icon: const Icon(Icons.person_add_outlined),
               label: const Text('Create Account'),
             ),
+
+            // TEMPORARY test button for the onboarding. It will be replaced
+            // by the real flow.
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (context) => const OnboardingFlowScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.checklist_outlined),
+              label: const Text('Onboarding'),
+            ),
           ],
         ),
       ),
     );
   }
+  
 }
