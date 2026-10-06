@@ -40,6 +40,11 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen> {
 
   int _step = 0;
 
+  // When onboarding was finished before, the saved answers are not shown as
+  // chosen. A choice is only highlighted after the user taps it.
+  bool _hideSavedAnswers = false;
+  final Set<int> _answeredThisVisit = {};
+
   // Saves wait for each other, so quick taps can never try to create the same
   // profile twice.
   Future<void> _saveQueue = Future<void>.value();
@@ -66,6 +71,7 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen> {
           _existsInDatabase = true;
 
           if (existing.isComplete) {
+            _hideSavedAnswers = true;
             // Finished before: start at the first question with the saved
             // answers filled in, so they can be changed.
             _step = 1;
@@ -95,6 +101,7 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen> {
 
   void _selectAnswer(OnboardingQuestion question, String value) {
     setState(() {
+      _answeredThisVisit.add(_step);
       _profile = question
           .writeAnswer(_profile!, value)
           .copyWith(updatedAt: DateTime.now());
@@ -187,7 +194,8 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen> {
     final isIntro = _step == 0;
     final isDone = _step == _lastStep;
     final question = (isIntro || isDone) ? null : onboardingQuestions[_step - 1];
-    final selectedValue = question?.readAnswer(profile);
+    final showSaved = !_hideSavedAnswers || _answeredThisVisit.contains(_step);
+    final selectedValue = showSaved ? question?.readAnswer(profile) : null;
 
     final String nextLabel;
     final VoidCallback? onNext;
