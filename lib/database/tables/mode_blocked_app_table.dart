@@ -10,7 +10,11 @@ class ModeBlockedAppTable {
         mode_id TEXT NOT NULL,
         app_identifier TEXT NOT NULL,
         app_name TEXT NOT NULL,
+
         created_at TEXT NOT NULL,
+        deleted_at TEXT,
+
+        sync_status TEXT NOT NULL DEFAULT 'PENDING',
 
         FOREIGN KEY (mode_id)
           REFERENCES modes(mode_id)

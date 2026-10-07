@@ -1,10 +1,14 @@
 package com.example.rest_for_more
 
 import android.accessibilityservice.AccessibilityService
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
@@ -20,10 +24,30 @@ class AppBlockingService : AccessibilityService() {
     private lateinit var windowManager: WindowManager
     private val handler = Handler(Looper.getMainLooper())
     private val removeOverlayRunnable = Runnable { removeOverlayNow() }
+    private val blockingChangedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != ACTION_BLOCKING_CHANGED) {
+                return
+            }
+            val enabled = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                .getBoolean("blocking_enabled", false)
+            if (!enabled) {
+                handler.removeCallbacks(removeOverlayRunnable)
+                removeOverlayNow()
+            }
+        }
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        val filter = IntentFilter(ACTION_BLOCKING_CHANGED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(blockingChangedReceiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(blockingChangedReceiver, filter)
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -61,6 +85,7 @@ class AppBlockingService : AccessibilityService() {
 
     override fun onDestroy() {
         handler.removeCallbacks(removeOverlayRunnable)
+        runCatching { unregisterReceiver(blockingChangedReceiver) }
         removeOverlayNow()
         super.onDestroy()
     }
@@ -159,6 +184,7 @@ class AppBlockingService : AccessibilityService() {
 
     companion object {
         const val PREFS_NAME = "app_blocker"
+        const val ACTION_BLOCKING_CHANGED = "com.example.rest_for_more.BLOCKING_CHANGED"
 
         fun unblockKey(packageName: String): String = "unblock_until_$packageName"
 

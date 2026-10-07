@@ -11,6 +11,8 @@ class SessionBlockedAppTable {
         app_identifier TEXT NOT NULL,
         app_name TEXT NOT NULL,
 
+        sync_status TEXT NOT NULL DEFAULT 'PENDING',
+
         FOREIGN KEY (session_id)
           REFERENCES sessions(session_id)
           ON DELETE CASCADE,

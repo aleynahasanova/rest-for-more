@@ -14,8 +14,12 @@ class RoutineItemTable {
         duration_minutes INTEGER,
         sort_order INTEGER NOT NULL DEFAULT 0,
         is_default INTEGER NOT NULL DEFAULT 0,
+
         created_at TEXT NOT NULL,
         updated_at TEXT,
+        deleted_at TEXT,
+
+        sync_status TEXT NOT NULL DEFAULT 'PENDING',
 
         FOREIGN KEY (routine_id)
           REFERENCES routines(routine_id)

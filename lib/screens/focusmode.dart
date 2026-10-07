@@ -266,6 +266,16 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
     widget.controller.startSession();
   }
 
+  Future<void> _pauseFocus() async {
+    await AppBlockService.stopBlocking();
+    widget.controller.pauseSession();
+  }
+
+  Future<void> _resumeFocus() async {
+    await AppBlockService.startBlocking();
+    widget.controller.resumeSession();
+  }
+
   Future<void> _stopFocus() async {
     await _stopBlocking();
     widget.controller.cancelSession();
@@ -338,6 +348,8 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
             _FocusActiveView(
               controller: widget.controller,
               pausedAppCount: _selectedAppIds.length,
+              onPause: _pauseFocus,
+              onResume: _resumeFocus,
               onStop: _stopFocus,
               onManageApps: _openBlockedAppsManager,
             ),
@@ -691,12 +703,16 @@ class _FocusActiveView extends StatelessWidget {
   const _FocusActiveView({
     required this.controller,
     required this.pausedAppCount,
+    required this.onPause,
+    required this.onResume,
     required this.onStop,
     required this.onManageApps,
   });
 
   final FocusTimerController controller;
   final int pausedAppCount;
+  final VoidCallback onPause;
+  final VoidCallback onResume;
   final VoidCallback onStop;
   final VoidCallback onManageApps;
 
@@ -740,8 +756,7 @@ class _FocusActiveView extends StatelessWidget {
               const Spacer(),
               FocusPrimaryButton(
                 label: isPaused ? 'Resume' : 'Pause',
-                onPressed:
-                    isPaused ? controller.resumeSession : controller.pauseSession,
+                onPressed: isPaused ? onResume : onPause,
               ),
               const SizedBox(height: 12),
               TextButton(

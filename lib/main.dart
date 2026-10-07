@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 
 import 'database/app_database.dart';
+import 'controllers/morning_routine_session.dart';
+import 'controllers/night_routine_session.dart';
 
 import 'screens/focusmode.dart';
+import 'screens/morningroutine.dart';
+import 'screens/night_routine.dart';
+import 'screens/registration_screen.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -20,16 +25,22 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   late final FocusTimerController _focusTimerController;
+  late final MorningRoutineSession _morningSession;
+  late final NightRoutineSession _nightSession;
 
   @override
   void initState() {
     super.initState();
     _focusTimerController = FocusTimerController();
+    _morningSession = MorningRoutineSession();
+    _nightSession = NightRoutineSession();
   }
 
   @override
   void dispose() {
     _focusTimerController.dispose();
+    _morningSession.dispose();
+    _nightSession.dispose();
     super.dispose();
   }
 
@@ -39,15 +50,26 @@ class _MyAppState extends State<MyApp> {
       title: 'Focus Mode',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      home: MyHomePage(focusTimerController: _focusTimerController),
+      home: MyHomePage(
+        focusTimerController: _focusTimerController,
+        morningSession: _morningSession,
+        nightSession: _nightSession,
+      ),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({required this.focusTimerController, super.key});
+  const MyHomePage({
+    required this.focusTimerController,
+    required this.morningSession,
+    required this.nightSession,
+    super.key,
+  });
+  final MorningRoutineSession morningSession;
 
   final FocusTimerController focusTimerController;
+  final NightRoutineSession nightSession;
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
@@ -76,6 +98,46 @@ class _MyHomePageState extends State<MyHomePage> {
               },
               icon: const Icon(Icons.timer_outlined),
               label: const Text('Start Focus Mode'),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (context) =>
+                        MorningRoutineScreen(session: widget.morningSession),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.wb_sunny_outlined),
+              label: const Text('Morning routine'),
+            ),
+
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (context) =>
+                        NightRoutineScreen(session: widget.nightSession),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.bedtime_outlined),
+              label: const Text('Evening routine'),
+            ),
+
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (context) => const RegistrationScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.person_add_outlined),
+              label: const Text('Create Account'),
             ),
           ],
         ),

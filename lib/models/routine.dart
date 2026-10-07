@@ -5,6 +5,8 @@ class Routine {
   final String routineType;
   final DateTime createdAt;
   final DateTime? updatedAt;
+  final DateTime? deletedAt;
+  final String syncStatus;
 
   const Routine({
     required this.routineId,
@@ -13,6 +15,8 @@ class Routine {
     required this.routineType,
     required this.createdAt,
     this.updatedAt,
+    this.deletedAt,
+    this.syncStatus = 'PENDING',
   });
 
   Map<String, Object?> toMap() {
@@ -23,6 +27,8 @@ class Routine {
       'routine_type': routineType,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
+      'deleted_at': deletedAt?.toIso8601String(),
+      'sync_status': syncStatus,
     };
   }
 
@@ -36,6 +42,10 @@ class Routine {
       updatedAt: map['updated_at'] != null
           ? DateTime.parse(map['updated_at'] as String)
           : null,
+      deletedAt: map['deleted_at'] != null
+          ? DateTime.parse(map['deleted_at'] as String)
+          : null,
+      syncStatus: map['sync_status'] as String? ?? 'PENDING',
     );
   }
 }
