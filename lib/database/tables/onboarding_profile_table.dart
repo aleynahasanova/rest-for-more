@@ -28,6 +28,8 @@ class OnboardingProfileTable {
         created_at TEXT NOT NULL,
         updated_at TEXT,
 
+        sync_status TEXT NOT NULL DEFAULT 'PENDING',
+
         FOREIGN KEY (user_id)
           REFERENCES users(user_id)
           ON DELETE CASCADE

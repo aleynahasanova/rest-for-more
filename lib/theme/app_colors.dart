@@ -9,4 +9,15 @@ abstract final class AppColors {
   static const ink = Color(0xFF4E3B31);
   static const accent = Color(0xFFFFB60A);
   static const border = Color(0x1A4E3B31);
+
+  // Evening palette
+  static const nightBackground = Color(0xFF17110D);
+  static const nightSurface = Color(0xFF2A1D16);
+  static const nightSurfaceMuted = Color(0xFF3A291E);
+
+  static const nightText = Color(0xFFF1E5DA);
+  static const nightTextMuted = Color(0xFFB99A80);
+
+  static const nightBrand = Color(0xFF9A6538);
+  static const nightAccent = Color(0xFFD79A58);
 }

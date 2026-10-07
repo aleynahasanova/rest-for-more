@@ -89,11 +89,97 @@ class RoutineService {
     });
   }
 
+  /// Creates the default evening routine only when the routine is first created.
+  /// With no authenticated user, use the same local-only guest profile.
+  Future<Routine> ensureEveningRoutine({
+    String? userId,
+    required List<(String, String, int)> defaults,
+  }) async {
+    final database = await _databaseProvider();
+
+    return database.transaction((txn) async {
+      const guestId = '00000000-0000-4000-8000-000000000001';
+      final ownerId = userId ?? guestId;
+      final now = DateTime.now();
+
+      // Make sure the local guest exists when there is no logged-in user.
+      if (userId == null) {
+        final guests = await txn.query(
+          'users',
+          where: 'user_id = ?',
+          whereArgs: [guestId],
+        );
+
+        if (guests.isEmpty) {
+          await txn.insert('users', {
+            'user_id': guestId,
+            'email': 'local-guest@rest-for-more.invalid',
+            'password_hash': '!local-only-no-login',
+            'first_name': 'Guest',
+            'username': 'local_guest_$guestId',
+            'marketing_consent': 0,
+            'created_at': now.toIso8601String(),
+          });
+        }
+      }
+
+      // Check whether this user already has an evening routine.
+      final existing = await txn.query(
+        RoutineTable.tableName,
+        where: 'user_id = ? AND routine_type = ?',
+        whereArgs: [ownerId, 'evening'],
+        orderBy: 'created_at ASC',
+        limit: 1,
+      );
+
+      if (existing.isNotEmpty) {
+        return Routine.fromMap(existing.first);
+      }
+
+      // No evening routine yet, so create it.
+      final routine = Routine(
+        routineId: newId(),
+        userId: ownerId,
+        name: 'Evening routine',
+        routineType: 'evening',
+        createdAt: now,
+      );
+
+      await txn.insert(RoutineTable.tableName, routine.toMap());
+
+      // Seed the default evening steps.
+      for (var i = 0; i < defaults.length; i++) {
+        final (title, description, minutes) = defaults[i];
+
+        await txn.insert(
+          RoutineItemTable.tableName,
+          RoutineItem(
+            routineItemId: newId(),
+            routineId: routine.routineId,
+            title: title,
+            description: description,
+            durationMinutes: minutes,
+            sortOrder: i,
+            isDefault: true,
+            createdAt: now,
+          ).toMap(),
+        );
+      }
+
+      return routine;
+    });
+  }
+
   // CREATE
   Future<void> createRoutine(Routine routine) async {
     final database = await _databaseProvider();
 
-    await database.insert(RoutineTable.tableName, routine.toMap());
+    final data = routine.toMap();
+
+    // Any locally created routine needs to be synced.
+    data['sync_status'] = 'PENDING';
+
+    await database.insert(RoutineTable.tableName, data);
   }
 
   Future<void> createRoutineItem(RoutineItem item) async {
@@ -108,7 +194,7 @@ class RoutineService {
 
     final result = await database.query(
       RoutineTable.tableName,
-      where: 'user_id = ?',
+      where: 'user_id = ? AND deleted_at IS NULL',
       whereArgs: [userId],
       orderBy: 'created_at ASC',
     );
@@ -121,7 +207,7 @@ class RoutineService {
 
     final result = await database.query(
       RoutineTable.tableName,
-      where: 'routine_id = ?',
+      where: 'routine_id = ? AND deleted_at IS NULL',
       whereArgs: [routineId],
       limit: 1,
     );
@@ -150,9 +236,14 @@ class RoutineService {
   Future<void> updateRoutine(Routine routine) async {
     final database = await _databaseProvider();
 
+    final data = routine.toMap();
+
+    // Any local change must be uploaded again.
+    data['sync_status'] = 'PENDING';
+
     await database.update(
       RoutineTable.tableName,
-      routine.toMap(),
+      data,
       where: 'routine_id = ?',
       whereArgs: [routine.routineId],
     );
@@ -188,8 +279,13 @@ class RoutineService {
   Future<void> deleteRoutine(String routineId) async {
     final database = await _databaseProvider();
 
-    await database.delete(
+    final now = DateTime.now().toUtc().toIso8601String();
+
+    // Soft delete instead of physically removing the row.
+    // The tombstone can then be sent to PostgreSQL.
+    await database.update(
       RoutineTable.tableName,
+      {'deleted_at': now, 'updated_at': now, 'sync_status': 'PENDING'},
       where: 'routine_id = ?',
       whereArgs: [routineId],
     );
@@ -198,6 +294,8 @@ class RoutineService {
   Future<void> deleteRoutineItem(String routineItemId) async {
     final database = await _databaseProvider();
 
+    // RoutineItem sync will be implemented separately.
+    // Keep the current behavior for now.
     await database.delete(
       RoutineItemTable.tableName,
       where: 'routine_item_id = ?',

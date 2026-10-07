@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using RestForMore.Api.Data;
+using RestForMore.Api.Abstractions;
+using RestForMore.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,7 +15,12 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     )
 );
 
+builder.Services.AddScoped<ISyncService, SyncService>();
+builder.Services.AddControllers();
+
 var app = builder.Build();
+
+app.MapControllers();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
