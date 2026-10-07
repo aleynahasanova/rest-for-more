@@ -7,7 +7,10 @@ class UserService {
   Future<void> createUser(User user) async {
     final database = await AppDatabase.database;
 
-    await database.insert(UserTable.tableName, user.toMap());
+    await database.insert(
+      UserTable.tableName,
+      user.toMap(),
+    );
   }
 
   // READ
@@ -18,6 +21,25 @@ class UserService {
       UserTable.tableName,
       where: 'user_id = ?',
       whereArgs: [userId],
+      limit: 1,
+    );
+
+    if (result.isEmpty) {
+      return null;
+    }
+
+    return User.fromMap(result.first);
+  }
+
+  Future<User?> getUserByEmail(String email) async {
+    final database = await AppDatabase.database;
+
+    final normalizedEmail = email.trim().toLowerCase();
+
+    final result = await database.query(
+      UserTable.tableName,
+      where: 'email = ?',
+      whereArgs: [normalizedEmail],
       limit: 1,
     );
 
