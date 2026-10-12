@@ -8,14 +8,17 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
+import android.view.accessibility.AccessibilityManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     companion object {
-        private const val METHOD_CHANNEL =
+        private const val FOCUS_CHANNEL =
             "com.example.rest_for_more/focus_notification"
+        private const val BLOCKING_CHANNEL = "rest_for_more/app_blocking"
         private const val NOTIFICATION_CHANNEL_ID = "focus_timer"
         private const val NOTIFICATION_ID = 1001
         private const val ROUTINE_NOTIFICATION_ID = 1003
@@ -30,7 +33,7 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            METHOD_CHANNEL,
+            FOCUS_CHANNEL,
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "showFocusTimer", "showRoutineTimer" -> {
@@ -44,7 +47,10 @@ class MainActivity : FlutterActivity() {
                             null,
                         )
                     } else {
-                        showFocusTimerWhenAllowed(finishingAt, call.method == "showRoutineTimer")
+                        showFocusTimerWhenAllowed(
+                            finishingAt,
+                            call.method == "showRoutineTimer",
+                        )
                         result.success(null)
                     }
                 }
@@ -63,6 +69,114 @@ class MainActivity : FlutterActivity() {
 
                 else -> result.notImplemented()
             }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            BLOCKING_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            val preferences = getSharedPreferences(
+                AppBlockingService.PREFS_NAME,
+                MODE_PRIVATE,
+            )
+
+            when (call.method) {
+                "setBlockedApps" -> {
+                    val apps = call.argument<List<String>>("apps") ?: emptyList()
+                    preferences.edit()
+                        .putStringSet("blocked_apps", apps.toSet())
+                        .apply()
+                    result.success(true)
+                }
+
+                "startBlocking" -> {
+                    preferences.edit()
+                        .putBoolean("blocking_enabled", true)
+                        .commit()
+                    notifyBlockingChanged()
+                    result.success(true)
+                }
+
+                "stopBlocking" -> {
+                    preferences.edit()
+                        .putBoolean("blocking_enabled", false)
+                        .commit()
+                    notifyBlockingChanged()
+                    result.success(true)
+                }
+
+                "openAccessibilitySettings" -> {
+                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    result.success(true)
+                }
+
+                "isAccessibilityEnabled" -> {
+                    result.success(isBlockingServiceEnabled())
+                }
+
+                "setTemporaryUnblock" -> {
+                    val packageName = call.argument<String>("packageName")
+                    val untilEpochMs = call.argument<Number>("untilEpochMs")?.toLong()
+                    if (packageName.isNullOrBlank() || untilEpochMs == null) {
+                        result.error(
+                            "invalid_arguments",
+                            "packageName and untilEpochMs are required",
+                            null,
+                        )
+                    } else {
+                        preferences.edit()
+                            .putLong(
+                                AppBlockingService.unblockKey(packageName),
+                                untilEpochMs,
+                            )
+                            .apply()
+                        result.success(true)
+                    }
+                }
+
+                "clearTemporaryUnblock" -> {
+                    val packageName = call.argument<String>("packageName")
+                    if (packageName.isNullOrBlank()) {
+                        result.error(
+                            "invalid_arguments",
+                            "packageName is required",
+                            null,
+                        )
+                    } else {
+                        preferences.edit()
+                            .remove(AppBlockingService.unblockKey(packageName))
+                            .apply()
+                        result.success(true)
+                    }
+                }
+
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    private fun notifyBlockingChanged() {
+        sendBroadcast(
+            Intent(AppBlockingService.ACTION_BLOCKING_CHANGED).setPackage(packageName),
+        )
+    }
+
+    private fun isBlockingServiceEnabled(): Boolean {
+        val manager = getSystemService(ACCESSIBILITY_SERVICE) as AccessibilityManager
+        if (!manager.isEnabled) {
+            return false
+        }
+
+        val enabledServices = Settings.Secure.getString(
+            contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        ) ?: return false
+
+        val serviceName = "${packageName}/${AppBlockingService::class.java.name}"
+        val shortName = "${packageName}/.${AppBlockingService::class.java.simpleName}"
+        return enabledServices.split(':').any { enabled ->
+            enabled.equals(serviceName, ignoreCase = true) ||
+                enabled.equals(shortName, ignoreCase = true)
         }
     }
 
@@ -114,7 +228,13 @@ class MainActivity : FlutterActivity() {
         builder
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle(if (routine) "Morning routine" else "Focus Mode")
-            .setContentText(if (routine) "Time remaining in your morning routine." else "Stay with the task in front of you.")
+            .setContentText(
+                if (routine) {
+                    "Time remaining in your morning routine."
+                } else {
+                    "Stay with the task in front of you."
+                },
+            )
             .setContentIntent(openAppPendingIntent)
             .setCategory(Notification.CATEGORY_STOPWATCH)
             .setWhen(finishingAt)
@@ -130,13 +250,13 @@ class MainActivity : FlutterActivity() {
             builder.setTimeoutAfter(remainingMilliseconds)
         }
         if (Build.VERSION.SDK_INT >= 36) {
-            // Android 16+ can promote eligible ongoing notifications to a
-            // compact status-bar chip. With the chronometer configured above,
-            // the system can display the remaining time in that chip.
             builder.extras.putBoolean("android.requestPromotedOngoing", true)
         }
 
-        notificationManager().notify(if (routine) ROUTINE_NOTIFICATION_ID else NOTIFICATION_ID, builder.build())
+        notificationManager().notify(
+            if (routine) ROUTINE_NOTIFICATION_ID else NOTIFICATION_ID,
+            builder.build(),
+        )
     }
 
     private fun createNotificationChannel(routine: Boolean = false) {
@@ -147,7 +267,11 @@ class MainActivity : FlutterActivity() {
             if (routine) "Routine timer" else "Focus timer",
             NotificationManager.IMPORTANCE_LOW,
         ).apply {
-            description = if (routine) "Displays the remaining time for an active routine." else "Displays the remaining time for an active focus session."
+            description = if (routine) {
+                "Displays the remaining time for an active routine."
+            } else {
+                "Displays the remaining time for an active focus session."
+            }
             setSound(null, null)
             enableVibration(false)
         }
@@ -169,10 +293,10 @@ class MainActivity : FlutterActivity() {
         permissionRequestPending = false
         val timers = pendingTimers.toMap()
         pendingTimers.clear()
-        if (
-            grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
-        ) {
-            timers.forEach { (routine, finishingAt) -> showFocusTimer(finishingAt, routine) }
+        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            timers.forEach { (routine, finishingAt) ->
+                showFocusTimer(finishingAt, routine)
+            }
         }
     }
 }

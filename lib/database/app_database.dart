@@ -57,11 +57,8 @@ class AppDatabase {
     int oldVersion,
     int newVersion,
   ) async {
-    // ==========================================
     // VERSION 1 -> VERSION 2
-    // ==========================================
     if (oldVersion < 2) {
-      // Add the new onboarding fields.
       await database.execute(
         'ALTER TABLE onboarding_profiles ADD COLUMN rhythm TEXT',
       );
@@ -90,10 +87,8 @@ class AppDatabase {
         'ALTER TABLE onboarding_profiles ADD COLUMN onboarding_step INTEGER',
       );
 
-      // IMPORTANT:
-      // Create program_days using the historical Version 2 schema.
-      // Do not call ProgramDayTable.create() here because that now creates
-      // the current Version 3 schema, which already contains sync_status.
+      // Historical Version 2 schema. Do not call ProgramDayTable.create()
+      // here because that now creates the Version 3 schema with sync_status.
       await database.execute('''
         CREATE TABLE program_days (
           program_day_id TEXT PRIMARY KEY,
@@ -118,14 +113,8 @@ class AppDatabase {
       ''');
     }
 
-    // ==========================================
     // VERSION 2 -> VERSION 3
-    // ==========================================
     if (oldVersion < 3) {
-      // ------------------------------------------
-      // Soft-delete / tombstone fields
-      // ------------------------------------------
-
       await database.execute('ALTER TABLE routines ADD COLUMN deleted_at TEXT');
 
       await database.execute(
@@ -139,10 +128,6 @@ class AppDatabase {
       );
 
       await database.execute('ALTER TABLE sessions ADD COLUMN deleted_at TEXT');
-
-      // ------------------------------------------
-      // Local synchronization tracking
-      // ------------------------------------------
 
       await database.execute(
         "ALTER TABLE onboarding_profiles "

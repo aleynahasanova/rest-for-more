@@ -1,3 +1,5 @@
+import 'onboarding_options.dart';
+
 class OnboardingProfile {
   final String onboardingProfileId;
   final String userId;
@@ -14,6 +16,9 @@ class OnboardingProfile {
   final String? preferredActivity;
   final String? customActivity;
   final String? productOwnership;
+
+  /// Last onboarding step the user reached, so an interrupted intake can
+  /// resume. null = not started.
   final int? onboardingStep;
 
   final String productExpectation;
@@ -46,6 +51,79 @@ class OnboardingProfile {
     required this.createdAt,
     this.updatedAt,
   });
+
+  // Typed views of the stored text values, with a neutral `unknown` fallback.
+  AgeBand get ageBand => enumByName(AgeBand.values, ageGroup, AgeBand.unknown);
+  PrimaryGoal get primaryGoal =>
+      enumByName(PrimaryGoal.values, mainGoal, PrimaryGoal.unknown);
+  Obstacle get obstacle =>
+      enumByName(Obstacle.values, biggestChallenge, Obstacle.unknown);
+  Rhythm get rhythmOption => enumByName(Rhythm.values, rhythm, Rhythm.unknown);
+  FeasibleStep get feasibleStepOption =>
+      enumByName(FeasibleStep.values, feasibleStep, FeasibleStep.unknown);
+  PreferredActivity get preferredActivityOption => enumByName(
+        PreferredActivity.values,
+        preferredActivity,
+        PreferredActivity.unknown,
+      );
+  ProductOwnership get productOwnershipOption => enumByName(
+        ProductOwnership.values,
+        productOwnership,
+        ProductOwnership.unknown,
+      );
+
+  bool get isComplete => completedAt != null;
+  bool get isUnder16 => ageBand == AgeBand.under16;
+  bool get remindersEnabled => reminderTime != null;
+
+  /// Returns a changed copy. To switch reminders off use
+  /// `clearReminderTime: true` (a plain null cannot be passed through copyWith).
+  OnboardingProfile copyWith({
+    String? ageGroup,
+    String? mainGoal,
+    String? biggestChallenge,
+    String? phoneUseInBed,
+    int? phoneFreeTargetMinutes,
+    String? reminderTime,
+    bool clearReminderTime = false,
+    String? rhythm,
+    String? restMoments,
+    String? feasibleStep,
+    String? preferredActivity,
+    String? customActivity,
+    String? productOwnership,
+    int? onboardingStep,
+    String? productExpectation,
+    String? productIssue,
+    bool? wantsSupport,
+    DateTime? completedAt,
+    DateTime? updatedAt,
+  }) {
+    return OnboardingProfile(
+      onboardingProfileId: onboardingProfileId,
+      userId: userId,
+      ageGroup: ageGroup ?? this.ageGroup,
+      mainGoal: mainGoal ?? this.mainGoal,
+      biggestChallenge: biggestChallenge ?? this.biggestChallenge,
+      phoneUseInBed: phoneUseInBed ?? this.phoneUseInBed,
+      phoneFreeTargetMinutes:
+          phoneFreeTargetMinutes ?? this.phoneFreeTargetMinutes,
+      reminderTime: clearReminderTime ? null : (reminderTime ?? this.reminderTime),
+      rhythm: rhythm ?? this.rhythm,
+      restMoments: restMoments ?? this.restMoments,
+      feasibleStep: feasibleStep ?? this.feasibleStep,
+      preferredActivity: preferredActivity ?? this.preferredActivity,
+      customActivity: customActivity ?? this.customActivity,
+      productOwnership: productOwnership ?? this.productOwnership,
+      onboardingStep: onboardingStep ?? this.onboardingStep,
+      productExpectation: productExpectation ?? this.productExpectation,
+      productIssue: productIssue ?? this.productIssue,
+      wantsSupport: wantsSupport ?? this.wantsSupport,
+      completedAt: completedAt ?? this.completedAt,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
 
   Map<String, Object?> toMap() {
     return {

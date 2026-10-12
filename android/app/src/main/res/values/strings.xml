@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Rest For More</string>
+
+    <string name="accessibility_service_description">
+        Blocks selected apps during focus sessions.
+    </string>
+</resources>
