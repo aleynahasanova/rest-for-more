@@ -6,11 +6,14 @@ import '../widgets/focus_screen_header.dart';
 
 class ContemplationScreen extends StatefulWidget {
   const ContemplationScreen({
+    this.modeTitle = 'Focus',
     required this.appName,
     super.key,
   });
 
   final String appName;
+
+  final String modeTitle;
 
   @override
   State<ContemplationScreen> createState() => _ContemplationScreenState();
@@ -51,25 +54,24 @@ class _ContemplationScreenState extends State<ContemplationScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const FocusScreenHeader(),
+              FocusScreenHeader(title: widget.modeTitle),
               const Spacer(),
               Text(
                 'Take a moment to breathe',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontFamily: 'Georgia',
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.ink,
-                      height: 1.2,
-                    ),
+                  fontFamily: 'Georgia',
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.ink,
+                  height: 1.2,
+                ),
               ),
               const SizedBox(height: 12),
               Text(
                 'Do you still need ${widget.appName} right now?',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppColors.ink.withValues(alpha: 0.65),
-                    ),
+                style: Theme.of(context).textTheme.bodyLarge
+                    ?.copyWith(color: AppColors.ink.withValues(alpha: 0.65)),
               ),
               const SizedBox(height: 40),
               AnimatedBuilder(

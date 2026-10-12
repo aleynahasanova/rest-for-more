@@ -8,7 +8,15 @@ import '../widgets/focus_primary_button.dart';
 import '../widgets/focus_screen_header.dart';
 
 class BlockAppsSelectionScreen extends StatefulWidget {
-  const BlockAppsSelectionScreen({required this.initialSelection, super.key});
+  const BlockAppsSelectionScreen({
+    required this.initialSelection,
+    this.modeTitle = 'Focus',
+    this.onSave,
+    super.key,
+  });
+
+  final String modeTitle;
+  final Future<void> Function(Set<String>)? onSave;
 
   final Set<String> initialSelection;
 
@@ -19,6 +27,7 @@ class BlockAppsSelectionScreen extends StatefulWidget {
 
 class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
   late Set<String> _selectedIds;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -36,6 +45,26 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
     });
   }
 
+  Future<void> _save() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    final snapshot = Set<String>.from(_selectedIds);
+    try {
+      await widget.onSave?.call(snapshot);
+      if (mounted) Navigator.of(context).pop(snapshot);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not save your selection. Please try again.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -46,7 +75,7 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const FocusScreenHeader(),
+              FocusScreenHeader(title: widget.modeTitle),
               const SizedBox(height: 32),
               Text(
                 'What do you want to pause?',
@@ -59,7 +88,7 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'These apps will be blocked during your focus.',
+                'These apps will be blocked during ${widget.modeTitle.toLowerCase()} mode.',
                 style: Theme.of(context).textTheme.bodyLarge
                     ?.copyWith(color: AppColors.ink.withValues(alpha: 0.65)),
               ),
@@ -74,15 +103,17 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
                     return _AppSelectionRow(
                       app: app,
                       isSelected: isSelected,
-                      onTap: () => _toggleApp(app.id),
+                      onTap: () {
+                        if (!_saving) _toggleApp(app.id);
+                      },
                     );
                   },
                 ),
               ),
               const SizedBox(height: 16),
               FocusPrimaryButton(
-                label: 'Save selection',
-                onPressed: () => Navigator.of(context).pop(_selectedIds),
+                label: _saving ? 'Saving…' : 'Save selection',
+                onPressed: _saving ? null : _save,
               ),
             ],
           ),
