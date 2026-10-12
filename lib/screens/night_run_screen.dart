@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../controllers/routine_run_controller.dart';
+import '../widgets/countdown_timer.dart';
 import '../models/routine_item.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
@@ -153,51 +154,15 @@ class _NightRunScreenState extends State<NightRunScreen>
                             const SizedBox(height: 24),
 
                             if (!finished) ...[
-                              Center(
-                                child: SizedBox(
-                                  width: 220,
-                                  height: 220,
-                                  child: Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      SizedBox.expand(
-                                        child: TweenAnimationBuilder<double>(
-                                          key: ValueKey(_run.index),
-                                          tween: Tween(
-                                            begin: 0,
-                                            end: _run.progress,
-                                          ),
-                                          duration: const Duration(
-                                            milliseconds: 600,
-                                          ),
-                                          curve: Curves.easeOut,
-                                          builder: (context, value, _) {
-                                            return CircularProgressIndicator(
-                                              value: value,
-                                              strokeWidth: 3,
-                                              strokeCap: StrokeCap.round,
-                                              color: AppColors.nightAccent,
-                                              backgroundColor:
-                                                  AppColors.nightSurfaceMuted,
-                                              semanticsLabel:
-                                                  'Current step progress',
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                      Text(
-                                        RoutineRunController.countdown(
-                                          _run.remaining,
-                                        ),
-                                        style: AppTypography.timer.copyWith(
-                                          color: AppColors.nightText,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                              CountdownTimer(
+                                key: ValueKey(_run.index),
+                                remaining: _run.remaining,
+                                progress: _run.progress,
+                                progressLabel: 'Current step progress',
+                                textColor: AppColors.nightText,
+                                progressColor: AppColors.nightAccent,
+                                trackColor: AppColors.nightSurfaceMuted,
                               ),
-
                               const SizedBox(height: 22),
 
                               Text(
