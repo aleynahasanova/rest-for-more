@@ -25,7 +25,7 @@ class MainActivity : FlutterActivity() {
         private const val NOTIFICATION_PERMISSION_REQUEST = 1002
     }
 
-    private val pendingTimers = mutableMapOf<Boolean, Long>()
+    private val pendingTimers = mutableMapOf<Boolean, Pair<Long, String>>()
     private var permissionRequestPending = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -50,6 +50,7 @@ class MainActivity : FlutterActivity() {
                         showFocusTimerWhenAllowed(
                             finishingAt,
                             call.method == "showRoutineTimer",
+                            call.argument<String>("title") ?: "Focus Mode",
                         )
                         result.success(null)
                     }
@@ -180,13 +181,13 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun showFocusTimerWhenAllowed(finishingAt: Long, routine: Boolean = false) {
+    private fun showFocusTimerWhenAllowed(finishingAt: Long, routine: Boolean = false, title: String = "Focus Mode") {
         if (
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
                 PackageManager.PERMISSION_GRANTED
         ) {
-            pendingTimers[routine] = finishingAt
+            pendingTimers[routine] = Pair(finishingAt, title)
             if (!permissionRequestPending) {
                 permissionRequestPending = true
                 requestPermissions(
@@ -197,10 +198,10 @@ class MainActivity : FlutterActivity() {
             return
         }
 
-        showFocusTimer(finishingAt, routine)
+        showFocusTimer(finishingAt, routine, title)
     }
 
-    private fun showFocusTimer(finishingAt: Long, routine: Boolean = false) {
+    private fun showFocusTimer(finishingAt: Long, routine: Boolean = false, title: String = "Focus Mode") {
         if (finishingAt <= System.currentTimeMillis()) return
         val remainingMilliseconds =
             (finishingAt - System.currentTimeMillis()).coerceAtLeast(1L)
@@ -227,10 +228,12 @@ class MainActivity : FlutterActivity() {
 
         builder
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle(if (routine) "Morning routine" else "Focus Mode")
+            .setContentTitle(if (routine) "Morning routine" else title)
             .setContentText(
                 if (routine) {
                     "Time remaining in your morning routine."
+                } else if (title == "Reading Mode") {
+                    "Stay with the page in front of you."
                 } else {
                     "Stay with the task in front of you."
                 },
@@ -294,8 +297,8 @@ class MainActivity : FlutterActivity() {
         val timers = pendingTimers.toMap()
         pendingTimers.clear()
         if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
-            timers.forEach { (routine, finishingAt) ->
-                showFocusTimer(finishingAt, routine)
+            timers.forEach { (routine, timer) ->
+                showFocusTimer(timer.first, routine, timer.second)
             }
         }
     }

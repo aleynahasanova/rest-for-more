@@ -5,13 +5,15 @@ import 'controllers/morning_routine_session.dart';
 import 'controllers/night_routine_session.dart';
 
 import 'screens/focusmode.dart';
+import 'screens/reading_mode_screen.dart';
+import 'controllers/blocking_mode_session.dart';
+import 'models/blocking_mode.dart';
 import 'screens/morningroutine.dart';
 import 'screens/night_routine.dart';
 import 'dev/program_preview_screen.dart';
 import 'screens/onboarding/onboarding_flow_screen.dart';
 import 'screens/registration_screen.dart';
 import 'theme/app_theme.dart';
-
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,14 +29,23 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  late final FocusTimerController _focusTimerController;
+  late final BlockingModeSession _focusTimerController;
+  late final BlockingModeSession _readingSession;
   late final MorningRoutineSession _morningSession;
   late final NightRoutineSession _nightSession;
 
   @override
   void initState() {
     super.initState();
-    _focusTimerController = FocusTimerController();
+    final coordinator = BlockingSessionCoordinator();
+    _focusTimerController = BlockingModeSession(
+      mode: BlockingMode.focus,
+      coordinator: coordinator,
+    );
+    _readingSession = BlockingModeSession(
+      mode: BlockingMode.reading,
+      coordinator: coordinator,
+    );
     _morningSession = MorningRoutineSession();
     _nightSession = NightRoutineSession();
   }
@@ -42,6 +53,7 @@ class _MyAppState extends State<MyApp> {
   @override
   void dispose() {
     _focusTimerController.dispose();
+    _readingSession.dispose();
     _morningSession.dispose();
     _nightSession.dispose();
     super.dispose();
@@ -55,6 +67,7 @@ class _MyAppState extends State<MyApp> {
       theme: AppTheme.light,
       home: MyHomePage(
         focusTimerController: _focusTimerController,
+        readingSession: _readingSession,
         morningSession: _morningSession,
         nightSession: _nightSession,
       ),
@@ -65,13 +78,15 @@ class _MyAppState extends State<MyApp> {
 class MyHomePage extends StatefulWidget {
   const MyHomePage({
     required this.focusTimerController,
+    required this.readingSession,
     required this.morningSession,
     required this.nightSession,
     super.key,
   });
   final MorningRoutineSession morningSession;
 
-  final FocusTimerController focusTimerController;
+  final BlockingModeSession focusTimerController;
+  final BlockingModeSession readingSession;
   final NightRoutineSession nightSession;
 
   @override
@@ -84,95 +99,107 @@ class _MyHomePageState extends State<MyHomePage> {
     return Scaffold(
       appBar: AppBar(),
       body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Ready to put your phone aside?'),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (context) => FocusModeScreen(
-                      controller: widget.focusTimerController,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Ready to put your phone aside?'),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (context) => FocusModeScreen(
+                        controller: widget.focusTimerController,
+                      ),
                     ),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.timer_outlined),
-              label: const Text('Start Focus Mode'),
-            ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: () {
-                Navigator.of(context).push(
+                  );
+                },
+                icon: const Icon(Icons.timer_outlined),
+                label: const Text('Start Focus Mode'),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (context) =>
-                        MorningRoutineScreen(session: widget.morningSession),
+                    builder: (_) =>
+                        ReadingModeScreen(session: widget.readingSession),
                   ),
-                );
-              },
-              icon: const Icon(Icons.wb_sunny_outlined),
-              label: const Text('Morning routine'),
-            ),
+                ),
+                icon: const Icon(Icons.menu_book_outlined),
+                label: const Text('Start Reading Mode'),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (context) =>
+                          MorningRoutineScreen(session: widget.morningSession),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.wb_sunny_outlined),
+                label: const Text('Morning routine'),
+              ),
 
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (context) =>
-                        NightRoutineScreen(session: widget.nightSession),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.bedtime_outlined),
-              label: const Text('Evening routine'),
-            ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (context) =>
+                          NightRoutineScreen(session: widget.nightSession),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.bedtime_outlined),
+                label: const Text('Evening routine'),
+              ),
 
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (context) => const RegistrationScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.person_add_outlined),
-              label: const Text('Create Account'),
-            ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (context) => const RegistrationScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.person_add_outlined),
+                label: const Text('Create Account'),
+              ),
 
-            // TEMPORARY test button for the onboarding. It will be replaced
-            // by the real flow.
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (context) => const OnboardingFlowScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.checklist_outlined),
-              label: const Text('Onboarding'),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (context) => const ProgramPreviewScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.calendar_view_week_outlined),
-              label: const Text('14-day programme'),
-            ),
-          ],
+              // TEMPORARY test button for the onboarding. It will be replaced
+              // by the real flow.
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (context) => const OnboardingFlowScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.checklist_outlined),
+                label: const Text('Onboarding'),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (context) => const ProgramPreviewScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.calendar_view_week_outlined),
+                label: const Text('14-day programme'),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
-  
 }
