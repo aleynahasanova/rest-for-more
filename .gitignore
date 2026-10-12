@@ -46,3 +46,13 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# .NET / ASP.NET Core build output
+**/bin/
+**/obj/
+
+# .NET user-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates

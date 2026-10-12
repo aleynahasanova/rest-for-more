@@ -1,16 +1,26 @@
 import '../database/app_database.dart';
 import '../database/tables/program_table.dart';
+import '../database/tables/program_day_table.dart';
 import '../models/program.dart';
+import '../models/program_day.dart';
 
 class ProgramService {
   // CREATE
+
   Future<void> createProgram(Program program) async {
     final database = await AppDatabase.database;
 
     await database.insert(ProgramTable.tableName, program.toMap());
   }
 
+  Future<void> createProgramDay(ProgramDay programDay) async {
+    final database = await AppDatabase.database;
+
+    await database.insert(ProgramDayTable.tableName, programDay.toMap());
+  }
+
   // READ
+
   Future<List<Program>> getProgramsByUserId(String userId) async {
     final database = await AppDatabase.database;
 
@@ -59,7 +69,58 @@ class ProgramService {
     return Program.fromMap(result.first);
   }
 
+  Future<List<ProgramDay>> getProgramDays(String programId) async {
+    final database = await AppDatabase.database;
+
+    final result = await database.query(
+      ProgramDayTable.tableName,
+      where: 'program_id = ?',
+      whereArgs: [programId],
+      orderBy: 'day_number ASC',
+    );
+
+    return result.map((map) => ProgramDay.fromMap(map)).toList();
+  }
+
+  Future<ProgramDay?> getProgramDayById(String programDayId) async {
+    final database = await AppDatabase.database;
+
+    final result = await database.query(
+      ProgramDayTable.tableName,
+      where: 'program_day_id = ?',
+      whereArgs: [programDayId],
+      limit: 1,
+    );
+
+    if (result.isEmpty) {
+      return null;
+    }
+
+    return ProgramDay.fromMap(result.first);
+  }
+
+  Future<ProgramDay?> getProgramDayByNumber(
+    String programId,
+    int dayNumber,
+  ) async {
+    final database = await AppDatabase.database;
+
+    final result = await database.query(
+      ProgramDayTable.tableName,
+      where: 'program_id = ? AND day_number = ?',
+      whereArgs: [programId, dayNumber],
+      limit: 1,
+    );
+
+    if (result.isEmpty) {
+      return null;
+    }
+
+    return ProgramDay.fromMap(result.first);
+  }
+
   // UPDATE
+
   Future<void> updateProgram(Program program) async {
     final database = await AppDatabase.database;
 
@@ -71,7 +132,19 @@ class ProgramService {
     );
   }
 
+  Future<void> updateProgramDay(ProgramDay programDay) async {
+    final database = await AppDatabase.database;
+
+    await database.update(
+      ProgramDayTable.tableName,
+      programDay.toMap(),
+      where: 'program_day_id = ?',
+      whereArgs: [programDay.programDayId],
+    );
+  }
+
   // DELETE
+
   Future<void> deleteProgram(String programId) async {
     final database = await AppDatabase.database;
 
@@ -79,6 +152,16 @@ class ProgramService {
       ProgramTable.tableName,
       where: 'program_id = ?',
       whereArgs: [programId],
+    );
+  }
+
+  Future<void> deleteProgramDay(String programDayId) async {
+    final database = await AppDatabase.database;
+
+    await database.delete(
+      ProgramDayTable.tableName,
+      where: 'program_day_id = ?',
+      whereArgs: [programDayId],
     );
   }
 }

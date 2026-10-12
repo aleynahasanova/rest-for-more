@@ -14,8 +14,12 @@ class SessionTable {
         started_at TEXT,
         paused_at TEXT,
         ended_at TEXT,
+
         created_at TEXT NOT NULL,
         updated_at TEXT,
+        deleted_at TEXT,
+
+        sync_status TEXT NOT NULL DEFAULT 'PENDING',
 
         FOREIGN KEY (mode_id)
           REFERENCES modes(mode_id)
