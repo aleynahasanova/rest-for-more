@@ -48,6 +48,18 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <service
+            android:name=".ReadingNotificationListenerService"
+            android:label="Rest For More notification access"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+
+        </service>
+
     </application>
 
     <!-- Required for Flutter's process text functionality. -->
