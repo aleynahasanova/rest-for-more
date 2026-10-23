@@ -7,6 +7,7 @@ import '../data/mock_blockable_apps.dart';
 import '../models/blockable_app.dart';
 import '../services/android_focus_notification.dart';
 import '../services/app_block_service.dart';
+import '../services/ios_app_blocking_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_icon_badge.dart';
 import '../widgets/focus_primary_button.dart';
@@ -17,8 +18,7 @@ import 'session_blocked_apps_screen.dart';
 
 enum FocusTimerStatus { ready, running, paused, completed }
 
-class FocusTimerController extends ChangeNotifier
-    with WidgetsBindingObserver {
+class FocusTimerController extends ChangeNotifier with WidgetsBindingObserver {
   static const minimumDurationMinutes = 1;
   static const maximumDurationMinutes = 180;
 
@@ -34,8 +34,7 @@ class FocusTimerController extends ChangeNotifier
   static const durationOptions = setupDurationOptions;
 
   FocusTimerController({
-    this._notification =
-        const AndroidFocusNotification(),
+    this._notification = const AndroidFocusNotification(),
   }) {
     WidgetsBinding.instance.addObserver(this);
   }
@@ -62,12 +61,11 @@ class FocusTimerController extends ChangeNotifier
   }
 
   String get statusMessage => switch (_status) {
-        FocusTimerStatus.ready => 'Set aside distractions and begin.',
-        FocusTimerStatus.running =>
-          'Working and studying without distractions',
-        FocusTimerStatus.paused => 'Your session is paused.',
-        FocusTimerStatus.completed => 'You made time for what matters.',
-      };
+    FocusTimerStatus.ready => 'Set aside distractions and begin.',
+    FocusTimerStatus.running => 'Working and studying without distractions',
+    FocusTimerStatus.paused => 'Your session is paused.',
+    FocusTimerStatus.completed => 'You made time for what matters.',
+  };
 
   String get selectedDurationLabel {
     final minutes = _selectedDuration.inMinutes;
@@ -187,10 +185,7 @@ class FocusTimerController extends ChangeNotifier
 }
 
 class FocusModeScreen extends StatefulWidget {
-  const FocusModeScreen({
-    required this.controller,
-    super.key,
-  });
+  const FocusModeScreen({required this.controller, super.key});
 
   final FocusTimerController controller;
 
@@ -200,6 +195,10 @@ class FocusModeScreen extends StatefulWidget {
 
 class _FocusModeScreenState extends State<FocusModeScreen> {
   late Set<String> _selectedAppIds;
+  int _iosSelectionCount = 0;
+  bool _blockingBusy = false;
+  int get _selectionCount =>
+      AppBlockService.isIOS ? _iosSelectionCount : _selectedAppIds.length;
   final Map<String, DateTime> _temporaryUnblocks = {};
   final Map<String, Timer> _relockTimers = {};
 
@@ -208,6 +207,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
     super.initState();
     _selectedAppIds = Set<String>.from(MockBlockableApps.defaultSelectedIds);
     widget.controller.addListener(_onTimerChanged);
+    if (AppBlockService.isIOS) unawaited(_refreshIOSSelection());
   }
 
   @override
@@ -221,7 +221,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
 
   void _onTimerChanged() {
     if (widget.controller.status == FocusTimerStatus.completed) {
-      unawaited(_stopBlocking());
+      unawaited(_runBlockingAction(_stopBlocking));
     }
   }
 
@@ -229,23 +229,61 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
       .where((app) => _selectedAppIds.contains(app.id))
       .toList();
 
-  Future<void> _openAppSelection() async {
-    final result = await Navigator.of(context).push<Set<String>>(
-      MaterialPageRoute(
-        builder: (context) => BlockAppsSelectionScreen(
-          initialSelection: _selectedAppIds,
+  void _showBlockingError(Object error) {
+    if (!mounted) return;
+    final message = error is PlatformException ? error.message : null;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message ?? 'Could not update app blocking. Please try again.',
         ),
       ),
     );
+  }
 
-    if (result != null) {
+  Future<void> _refreshIOSSelection() async {
+    try {
+      final count = await IOSAppBlockingService.selectionCount();
+      if (mounted) setState(() => _iosSelectionCount = count);
+    } on Exception catch (error) {
+      _showBlockingError(error);
+    }
+  }
+
+  Future<void> _openAppSelection() async {
+    final result = await Navigator.of(context).push<Set<String>>(
+      MaterialPageRoute(
+        builder: (context) =>
+            BlockAppsSelectionScreen(initialSelection: _selectedAppIds),
+      ),
+    );
+
+    if (!mounted) return;
+    if (AppBlockService.isIOS) await _refreshIOSSelection();
+    if (result != null && mounted) {
       setState(() => _selectedAppIds = result);
     }
   }
 
-  Future<void> _startFocus() async {
-    final accessibilityEnabled =
-        await AppBlockService.isAccessibilityEnabled();
+  Future<void> _startFocus() => _runBlockingAction(_startFocusImpl);
+  Future<void> _pauseFocus() => _runBlockingAction(_pauseFocusImpl);
+  Future<void> _resumeFocus() => _runBlockingAction(_resumeFocusImpl);
+  Future<void> _stopFocus() => _runBlockingAction(_stopFocusImpl);
+
+  Future<void> _runBlockingAction(Future<void> Function() action) async {
+    if (_blockingBusy) return;
+    _blockingBusy = true;
+    try {
+      await action();
+    } on Exception catch (error) {
+      _showBlockingError(error);
+    } finally {
+      _blockingBusy = false;
+    }
+  }
+
+  Future<void> _startFocusImpl() async {
+    final accessibilityEnabled = await AppBlockService.isAccessibilityEnabled();
     if (!mounted) return;
 
     if (!accessibilityEnabled) {
@@ -262,21 +300,23 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
     await AppBlockService.setBlockedApps(
       _selectedApps.map((app) => app.packageName).toList(),
     );
-    await AppBlockService.startBlocking();
-    widget.controller.startSession();
+    await AppBlockService.startBlocking(
+      duration: widget.controller.selectedDuration,
+    );
+    if (mounted) widget.controller.startSession();
   }
 
-  Future<void> _pauseFocus() async {
+  Future<void> _pauseFocusImpl() async {
     await AppBlockService.stopBlocking();
     widget.controller.pauseSession();
   }
 
-  Future<void> _resumeFocus() async {
-    await AppBlockService.startBlocking();
-    widget.controller.resumeSession();
+  Future<void> _resumeFocusImpl() async {
+    await AppBlockService.startBlocking(duration: widget.controller.remaining);
+    if (mounted) widget.controller.resumeSession();
   }
 
-  Future<void> _stopFocus() async {
+  Future<void> _stopFocusImpl() async {
     await _stopBlocking();
     widget.controller.cancelSession();
   }
@@ -309,6 +349,24 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
   }
 
   Future<void> _openBlockedAppsManager() async {
+    if (AppBlockService.isIOS) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Screen Time blocking'),
+          content: const Text(
+            'Your selected apps and categories are paused by Screen Time. Pause the focus session to access them, or stop it to change your selection.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     final result = await Navigator.of(context).push<Map<String, DateTime>>(
       MaterialPageRoute(
         builder: (context) => SessionBlockedAppsScreen(
@@ -338,24 +396,24 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
       builder: (context, _) {
         return switch (widget.controller.status) {
           FocusTimerStatus.ready => _FocusSetupView(
-              controller: widget.controller,
-              selectedApps: _selectedApps,
-              selectedCount: _selectedAppIds.length,
-              onChangeApps: _openAppSelection,
-              onStart: _startFocus,
-            ),
-          FocusTimerStatus.running || FocusTimerStatus.paused =>
-            _FocusActiveView(
-              controller: widget.controller,
-              pausedAppCount: _selectedAppIds.length,
-              onPause: _pauseFocus,
-              onResume: _resumeFocus,
-              onStop: _stopFocus,
-              onManageApps: _openBlockedAppsManager,
-            ),
+            controller: widget.controller,
+            selectedApps: _selectedApps,
+            selectedCount: _selectionCount,
+            onChangeApps: _openAppSelection,
+            onStart: _startFocus,
+          ),
+          FocusTimerStatus.running ||
+          FocusTimerStatus.paused => _FocusActiveView(
+            controller: widget.controller,
+            pausedAppCount: _selectionCount,
+            onPause: _pauseFocus,
+            onResume: _resumeFocus,
+            onStop: _stopFocus,
+            onManageApps: _openBlockedAppsManager,
+          ),
           FocusTimerStatus.completed => _FocusCompletedView(
-              controller: widget.controller,
-            ),
+            controller: widget.controller,
+          ),
         };
       },
     );
@@ -379,10 +437,8 @@ class _FocusSetupView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isCustomDuration =
-        !FocusTimerController.setupDurationOptions.contains(
-      controller.selectedDuration,
-    );
+    final isCustomDuration = !FocusTimerController.setupDurationOptions
+        .contains(controller.selectedDuration);
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -397,18 +453,17 @@ class _FocusSetupView extends StatelessWidget {
               Text(
                 'How long do you want to focus?',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontFamily: 'Georgia',
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.ink,
-                      height: 1.2,
-                    ),
+                  fontFamily: 'Georgia',
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.ink,
+                  height: 1.2,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
                 'You can always pause or stop along the way.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppColors.ink.withValues(alpha: 0.65),
-                    ),
+                style: Theme.of(context).textTheme.bodyLarge
+                    ?.copyWith(color: AppColors.ink.withValues(alpha: 0.65)),
               ),
               const SizedBox(height: 28),
               _DurationGrid(controller: controller),
@@ -424,10 +479,10 @@ class _FocusSetupView extends StatelessWidget {
               Text(
                 'APPS TO PAUSE',
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: AppColors.ink.withValues(alpha: 0.45),
-                      letterSpacing: 1.2,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  color: AppColors.ink.withValues(alpha: 0.45),
+                  letterSpacing: 1.2,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: 10),
               _AppsToPauseCard(
@@ -609,9 +664,9 @@ class _CustomTimeRow extends StatelessWidget {
                       ? 'Custom time ($customLabel)'
                       : 'Custom time',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.ink,
-                      ),
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.ink,
+                  ),
                 ),
               ),
               Icon(
@@ -650,17 +705,20 @@ class _AppsToPauseCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           child: Row(
             children: [
-              if (selectedApps.isEmpty)
+              if (AppBlockService.isIOS)
+                const Icon(Icons.phone_iphone, color: AppColors.ink)
+              else if (selectedApps.isEmpty)
                 Text(
                   'No apps selected',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: AppColors.ink.withValues(alpha: 0.65),
-                      ),
+                  style: Theme.of(context).textTheme.bodyLarge
+                      ?.copyWith(color: AppColors.ink.withValues(alpha: 0.65)),
                 )
               else
                 SizedBox(
                   height: 36,
-                  width: selectedApps.length > 3 ? 96 : 36.0 * selectedApps.length,
+                  width: selectedApps.length > 3
+                      ? 96
+                      : 36.0 * selectedApps.length,
                   child: Stack(
                     children: [
                       for (var i = 0; i < selectedApps.length && i < 3; i++)
@@ -674,13 +732,15 @@ class _AppsToPauseCard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  selectedCount == 1
+                  AppBlockService.isIOS
+                      ? '$selectedCount Screen Time selections'
+                      : selectedCount == 1
                       ? '1 app selected'
                       : '$selectedCount apps selected',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.ink,
-                      ),
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.ink,
+                  ),
                 ),
               ),
               TextButton(
@@ -731,9 +791,8 @@ class _FocusActiveView extends StatelessWidget {
               FocusScreenHeader(
                 trailing: Text(
                   'of ${controller.selectedDurationLabel}',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.ink.withValues(alpha: 0.55),
-                      ),
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(color: AppColors.ink.withValues(alpha: 0.55)),
                 ),
               ),
               const Spacer(),
@@ -742,9 +801,8 @@ class _FocusActiveView extends StatelessWidget {
               Text(
                 controller.statusMessage,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppColors.ink.withValues(alpha: 0.7),
-                    ),
+                style: Theme.of(context).textTheme.bodyLarge
+                    ?.copyWith(color: AppColors.ink.withValues(alpha: 0.7)),
               ),
               const SizedBox(height: 16),
               Center(
@@ -761,9 +819,7 @@ class _FocusActiveView extends StatelessWidget {
               const SizedBox(height: 12),
               TextButton(
                 onPressed: onStop,
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.ink,
-                ),
+                style: TextButton.styleFrom(foregroundColor: AppColors.ink),
                 child: const Text('Stop'),
               ),
             ],
@@ -796,12 +852,12 @@ class _TimerDisplay extends StatelessWidget {
         child: Text(
           time,
           style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                fontFamily: 'Georgia',
-                fontWeight: FontWeight.w300,
-                fontSize: 56,
-                letterSpacing: 1,
-                color: AppColors.ink,
-              ),
+            fontFamily: 'Georgia',
+            fontWeight: FontWeight.w300,
+            fontSize: 56,
+            letterSpacing: 1,
+            color: AppColors.ink,
+          ),
         ),
       ),
     );
@@ -809,17 +865,18 @@ class _TimerDisplay extends StatelessWidget {
 }
 
 class _PausedAppsBadge extends StatelessWidget {
-  const _PausedAppsBadge({
-    required this.count,
-    required this.onTap,
-  });
+  const _PausedAppsBadge({required this.count, required this.onTap});
 
   final int count;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final label = count == 1 ? '1 app paused' : '$count apps paused';
+    final label = AppBlockService.isIOS
+        ? '$count Screen Time selections'
+        : count == 1
+        ? '1 app paused'
+        : '$count apps paused';
 
     return Material(
       color: AppColors.surfaceMuted,
@@ -841,9 +898,9 @@ class _PausedAppsBadge extends StatelessWidget {
               Text(
                 label,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.ink.withValues(alpha: 0.75),
-                      fontWeight: FontWeight.w500,
-                    ),
+                  color: AppColors.ink.withValues(alpha: 0.75),
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ],
           ),
@@ -874,18 +931,17 @@ class _FocusCompletedView extends StatelessWidget {
                 'Focus session complete',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontFamily: 'Georgia',
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.ink,
-                    ),
+                  fontFamily: 'Georgia',
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.ink,
+                ),
               ),
               const SizedBox(height: 12),
               Text(
                 controller.statusMessage,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppColors.ink.withValues(alpha: 0.65),
-                    ),
+                style: Theme.of(context).textTheme.bodyLarge
+                    ?.copyWith(color: AppColors.ink.withValues(alpha: 0.65)),
               ),
               const Spacer(),
               FocusPrimaryButton(

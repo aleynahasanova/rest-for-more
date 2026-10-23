@@ -102,14 +102,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.0.0"
-  flutter_screentime:
-    dependency: "direct main"
-    description:
-      name: flutter_screentime
-      sha256: b0d806a159d0e6c39a62f7368cfedbae0179cabbbf53edb14013e2c55864b1cc
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.1.5"
   flutter_test:
     dependency: "direct dev"
     description: flutter

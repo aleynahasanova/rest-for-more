@@ -1,39 +1,34 @@
-import 'dart:io';
+import 'package:flutter/services.dart';
 
-import 'package:flutter_screentime/flutter_screentime.dart';
-
+/// Screen Time keeps app identities on the device; Flutter receives counts only.
 class IOSAppBlockingService {
   IOSAppBlockingService._();
+  static const _channel = MethodChannel('rest_for_more/ios_app_blocking');
 
-  static const FlutterScreentime _screenTime = FlutterScreentime();
+  static Future<bool> isAuthorized() async =>
+      await _channel.invokeMethod<bool>('isAuthorized') ?? false;
 
-  static void _checkPlatform() {
-    if (!Platform.isIOS) {
-      throw UnsupportedError('This service is only available on iOS.');
+  static Future<void> requestPermission() async {
+    final approved = await _channel.invokeMethod<bool>('requestPermission');
+    if (approved != true) {
+      throw PlatformException(
+        code: 'permission_denied',
+        message: 'Allow Screen Time access to pause apps during focus.',
+      );
     }
   }
 
-  // Request Screen Time permission
-  static Future<void> requestPermission() async {
-    _checkPlatform();
-    await _screenTime.requestAuthorization();
-  }
+  static Future<int> selectionCount() async =>
+      await _channel.invokeMethod<int>('selectionCount') ?? 0;
 
-  // Open the native iOS app picker
-  static Future<void> selectApps() async {
-    _checkPlatform();
-    await _screenTime.selectBlockedApps();
-  }
+  /// Null means Cancel; an empty selection is a valid saved selection.
+  static Future<int?> selectApps() => _channel.invokeMethod<int>('selectApps');
 
-  // Start blocking the selected apps
-  static Future<void> startBlocking() async {
-    _checkPlatform();
-    await _screenTime.startBlocking();
-  }
+  static Future<void> startBlocking(Duration duration) =>
+      _channel.invokeMethod<void>('startBlocking', {
+        'durationSeconds': duration.inSeconds,
+      });
 
-  // Stop blocking the selected apps
-  static Future<void> stopBlocking() async {
-    _checkPlatform();
-    await _screenTime.stopBlocking();
-  }
+  static Future<void> stopBlocking() =>
+      _channel.invokeMethod<void>('stopBlocking');
 }

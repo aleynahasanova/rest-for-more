@@ -1,6 +1,7 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../services/app_block_service.dart';
 
 import '../data/mock_blockable_apps.dart';
 import '../models/blockable_app.dart';
@@ -22,6 +23,7 @@ class BlockAppsSelectionScreen extends StatefulWidget {
 
 class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
   late Set<String> _selectedIds;
+  bool _busy = false;
 
   @override
   void initState() {
@@ -40,33 +42,31 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
     });
   }
 
-  // iOS - Request Screen Time permission
-  Future<void> requestIOSPermission() async {
-    if (!Platform.isIOS) return;
-
-    try {
-      await IOSAppBlockingService.requestPermission();
-    } catch (error) {
-      debugPrint('iOS permission error: $error');
-    }
-  }
-
-  // iOS - Open native app selection
   Future<void> selectIOSApps() async {
-    if (!Platform.isIOS) return;
-
+    if (_busy) return;
+    setState(() => _busy = true);
     try {
-      await IOSAppBlockingService.selectApps();
-    } catch (error) {
-      debugPrint('iOS app selection error: $error');
+      if (!await IOSAppBlockingService.isAuthorized()) {
+        await IOSAppBlockingService.requestPermission();
+      }
+      final count = await IOSAppBlockingService.selectApps();
+      if (mounted && count != null) Navigator.of(context).pop(<String>{});
+    } on PlatformException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error.message ?? 'Could not select apps. Please try again.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
-  // Save selection
-  void _saveSelection() {
-    Navigator.of(context).pop(Platform.isIOS ? <String>{} : _selectedIds);
-  }
-
+  void _saveSelection() => Navigator.of(context).pop(_selectedIds);
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -101,7 +101,7 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
               const SizedBox(height: 24),
 
               // iOS - Native Screen Time selection
-              if (Platform.isIOS)
+              if (AppBlockService.isIOS)
                 Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -124,15 +124,10 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
                       const SizedBox(height: 24),
 
                       FocusPrimaryButton(
-                        label: 'Enable App Blocking',
-                        onPressed: requestIOSPermission,
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      FocusPrimaryButton(
-                        label: 'Select Apps',
-                        onPressed: selectIOSApps,
+                        label: _busy
+                            ? 'Opening Screen Time...'
+                            : 'Choose apps and categories',
+                        onPressed: _busy ? null : selectIOSApps,
                       ),
                     ],
                   ),
@@ -158,10 +153,11 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
 
               const SizedBox(height: 16),
 
-              FocusPrimaryButton(
-                label: 'Save selection',
-                onPressed: _saveSelection,
-              ),
+              if (!AppBlockService.isIOS)
+                FocusPrimaryButton(
+                  label: 'Save selection',
+                  onPressed: _saveSelection,
+                ),
             ],
           ),
         ),

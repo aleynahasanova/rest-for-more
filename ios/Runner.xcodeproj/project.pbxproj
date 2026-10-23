@@ -16,6 +16,8 @@
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
+F0C05A000000000000000001 = {isa = PBXBuildFile; fileRef = F0C05A000000000000000002; };
+F0C05A000000000000000003 = {isa = PBXBuildFile; fileRef = F0C05A000000000000000004; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -26,6 +28,7 @@
 			remoteGlobalIDString = 97C146ED1CF9000F007C117D;
 			remoteInfo = Runner;
 		};
+F0C05A00000000000000000D = {isa = PBXContainerItemProxy; containerPortal = 97C146E61CF9000F007C117D; proxyType = 1; remoteGlobalIDString = F0C05A00000000000000000F; remoteInfo = FocusActivityMonitor; };
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -39,6 +42,7 @@
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+F0C05A00000000000000000C = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (F0C05A000000000000000003, ); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -59,6 +63,11 @@
 		97C146FD1CF9000F007C117D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+F0C05A000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusActivityMonitor.swift; sourceTree = "<group>"; };
+F0C05A000000000000000004 = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FocusActivityMonitor.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+F0C05A000000000000000005 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+F0C05A000000000000000006 = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FocusActivityMonitor.entitlements; sourceTree = "<group>"; };
+F0C05A000000000000000007 = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -70,6 +79,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+F0C05A00000000000000000A = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -98,6 +108,7 @@
 			children = (
 				9740EEB11CF90186004384FC /* Flutter */,
 				97C146F01CF9000F007C117D /* Runner */,
+F0C05A000000000000000008,
 				97C146EF1CF9000F007C117D /* Products */,
 				331C8082294A63A400263BE5 /* RunnerTests */,
 			);
@@ -107,6 +118,7 @@
 			isa = PBXGroup;
 			children = (
 				97C146EE1CF9000F007C117D /* Runner.app */,
+F0C05A000000000000000004,
 				331C8081294A63A400263BE5 /* RunnerTests.xctest */,
 			);
 			name = Products;
@@ -122,12 +134,14 @@
 				1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */,
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
+F0C05A000000000000000007,
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
 		};
+F0C05A000000000000000008 = {isa = PBXGroup; children = (F0C05A000000000000000002, F0C05A000000000000000005, F0C05A000000000000000006, ); path = FocusActivityMonitor; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -157,11 +171,13 @@
 				97C146EB1CF9000F007C117D /* Frameworks */,
 				97C146EC1CF9000F007C117D /* Resources */,
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
+F0C05A00000000000000000C,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+F0C05A00000000000000000E,
 			);
 			name = Runner;
 			packageProductDependencies = (
@@ -171,6 +187,7 @@
 			productReference = 97C146EE1CF9000F007C117D /* Runner.app */;
 			productType = "com.apple.product-type.application";
 		};
+F0C05A00000000000000000F = {isa = PBXNativeTarget; buildConfigurationList = F0C05A000000000000000010; buildPhases = (F0C05A000000000000000009, F0C05A00000000000000000A, F0C05A00000000000000000B, ); buildRules = (); dependencies = (); name = FocusActivityMonitor; productName = FocusActivityMonitor; productReference = F0C05A000000000000000004; productType = "com.apple.product-type.app-extension"; };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -207,6 +224,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+F0C05A00000000000000000F,
 				97C146ED1CF9000F007C117D /* Runner */,
 				331C8080294A63A400263BE5 /* RunnerTests */,
 			);
@@ -232,6 +250,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+F0C05A00000000000000000B = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
@@ -287,6 +306,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+F0C05A000000000000000009 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (F0C05A000000000000000001, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -295,6 +315,7 @@
 			target = 97C146ED1CF9000F007C117D /* Runner */;
 			targetProxy = 331C8085294A63A400263BE5 /* PBXContainerItemProxy */;
 		};
+F0C05A00000000000000000E = {isa = PBXTargetDependency; target = F0C05A00000000000000000F; targetProxy = F0C05A00000000000000000D; };
 /* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
@@ -360,7 +381,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -380,6 +401,7 @@
 				DEVELOPMENT_TEAM = A7UBY7N5C5;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
+                CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -488,7 +510,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
@@ -540,7 +562,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -562,6 +584,7 @@
 				DEVELOPMENT_TEAM = A7UBY7N5C5;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
+                CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -585,6 +608,7 @@
 				DEVELOPMENT_TEAM = A7UBY7N5C5;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
+                CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -597,6 +621,57 @@
 			};
 			name = Release;
 		};
+F0C05A000000000000000011 = {isa = XCBuildConfiguration;
+ baseConfigurationReference = 9740EEB21CF90195004384FC;
+ buildSettings = {
+ APPLICATION_EXTENSION_API_ONLY = YES;
+ CLANG_ENABLE_MODULES = YES;
+ CODE_SIGN_ENTITLEMENTS = FocusActivityMonitor/FocusActivityMonitor.entitlements;
+ CODE_SIGN_STYLE = Automatic;
+ DEVELOPMENT_TEAM = A7UBY7N5C5;
+ INFOPLIST_FILE = FocusActivityMonitor/Info.plist;
+ IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+ LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
+ PRODUCT_BUNDLE_IDENTIFIER = com.example.restForMore.FocusActivityMonitor;
+ PRODUCT_NAME = "$(TARGET_NAME)";
+ SKIP_INSTALL = YES;
+ SWIFT_VERSION = 5.0;
+ TARGETED_DEVICE_FAMILY = "1,2";
+ }; name = Debug; };
+F0C05A000000000000000012 = {isa = XCBuildConfiguration;
+ baseConfigurationReference = 7AFA3C8E1D35360C0083082E;
+ buildSettings = {
+ APPLICATION_EXTENSION_API_ONLY = YES;
+ CLANG_ENABLE_MODULES = YES;
+ CODE_SIGN_ENTITLEMENTS = FocusActivityMonitor/FocusActivityMonitor.entitlements;
+ CODE_SIGN_STYLE = Automatic;
+ DEVELOPMENT_TEAM = A7UBY7N5C5;
+ INFOPLIST_FILE = FocusActivityMonitor/Info.plist;
+ IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+ LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
+ PRODUCT_BUNDLE_IDENTIFIER = com.example.restForMore.FocusActivityMonitor;
+ PRODUCT_NAME = "$(TARGET_NAME)";
+ SKIP_INSTALL = YES;
+ SWIFT_VERSION = 5.0;
+ TARGETED_DEVICE_FAMILY = "1,2";
+ }; name = Release; };
+F0C05A000000000000000013 = {isa = XCBuildConfiguration;
+ baseConfigurationReference = 7AFA3C8E1D35360C0083082E;
+ buildSettings = {
+ APPLICATION_EXTENSION_API_ONLY = YES;
+ CLANG_ENABLE_MODULES = YES;
+ CODE_SIGN_ENTITLEMENTS = FocusActivityMonitor/FocusActivityMonitor.entitlements;
+ CODE_SIGN_STYLE = Automatic;
+ DEVELOPMENT_TEAM = A7UBY7N5C5;
+ INFOPLIST_FILE = FocusActivityMonitor/Info.plist;
+ IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+ LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
+ PRODUCT_BUNDLE_IDENTIFIER = com.example.restForMore.FocusActivityMonitor;
+ PRODUCT_NAME = "$(TARGET_NAME)";
+ SKIP_INSTALL = YES;
+ SWIFT_VERSION = 5.0;
+ TARGETED_DEVICE_FAMILY = "1,2";
+ }; name = Profile; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -630,6 +705,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+F0C05A000000000000000010 = {isa = XCConfigurationList; buildConfigurations = (F0C05A000000000000000011, F0C05A000000000000000012, F0C05A000000000000000013, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */

@@ -39,7 +39,16 @@ class _BlockingPermissionsScreenState extends State<BlockingPermissionsScreen>
   }
 
   Future<void> _refreshStatus() async {
-    final enabled = await AppBlockService.isAccessibilityEnabled();
+    bool enabled;
+    try {
+      enabled = await AppBlockService.isAccessibilityEnabled();
+    } on Exception catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$error')));
+      }
+      enabled = false;
+    }
     if (!mounted) return;
     setState(() {
       _isEnabled = enabled;
@@ -62,18 +71,19 @@ class _BlockingPermissionsScreenState extends State<BlockingPermissionsScreen>
               Text(
                 'Allow Rest For More to pause apps',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontFamily: 'Georgia',
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.ink,
-                      height: 1.2,
-                    ),
+                  fontFamily: 'Georgia',
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.ink,
+                  height: 1.2,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
-                'Turn on the Rest For More accessibility service so selected apps can be blocked during focus.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppColors.ink.withValues(alpha: 0.65),
-                    ),
+                AppBlockService.isIOS
+                    ? 'Allow Screen Time access to pause the apps and categories you choose during focus.'
+                    : 'Turn on the Rest For More accessibility service so selected apps can be blocked during focus.',
+                style: Theme.of(context).textTheme.bodyLarge
+                    ?.copyWith(color: AppColors.ink.withValues(alpha: 0.65)),
               ),
               const SizedBox(height: 28),
               Container(
@@ -86,12 +96,12 @@ class _BlockingPermissionsScreenState extends State<BlockingPermissionsScreen>
                   _isChecking
                       ? 'Checking permission…'
                       : _isEnabled
-                          ? 'App blocking is enabled.'
-                          : 'App blocking is not enabled yet.',
+                      ? 'App blocking is enabled.'
+                      : 'App blocking is not enabled yet.',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: AppColors.ink,
-                        fontWeight: FontWeight.w500,
-                      ),
+                    color: AppColors.ink,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
               const Spacer(),
@@ -99,9 +109,18 @@ class _BlockingPermissionsScreenState extends State<BlockingPermissionsScreen>
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: FocusPrimaryButton(
-                    label: 'Open accessibility settings',
+                    label: AppBlockService.isIOS
+                        ? 'Allow Screen Time access'
+                        : 'Open accessibility settings',
                     onPressed: () async {
-                      await AppBlockService.openAccessibilitySettings();
+                      try {
+                        await AppBlockService.openAccessibilitySettings();
+                        await _refreshStatus();
+                      } on Exception catch (error) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(SnackBar(content: Text('$error')));
+                      }
                     },
                   ),
                 ),
