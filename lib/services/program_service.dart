@@ -1,6 +1,8 @@
 import '../database/app_database.dart';
+import '../database/tables/program_day_table.dart';
 import '../database/tables/program_table.dart';
 import '../models/program.dart';
+import '../models/program_day.dart';
 
 class ProgramService {
   // CREATE
@@ -59,7 +61,31 @@ class ProgramService {
     return Program.fromMap(result.first);
   }
 
+  Future<List<ProgramDay>> getProgramDays(String programId) async {
+    final database = await AppDatabase.database;
+
+    final result = await database.query(
+      ProgramDayTable.tableName,
+      where: 'program_id = ?',
+      whereArgs: [programId],
+      orderBy: 'day_number ASC',
+    );
+
+    return result.map((map) => ProgramDay.fromMap(map)).toList();
+  }
+
   // UPDATE
+  Future<void> updateProgramDay(ProgramDay day) async {
+    final database = await AppDatabase.database;
+
+    await database.update(
+      ProgramDayTable.tableName,
+      day.toMap(),
+      where: 'program_day_id = ?',
+      whereArgs: [day.programDayId],
+    );
+  }
+
   Future<void> updateProgram(Program program) async {
     final database = await AppDatabase.database;
 

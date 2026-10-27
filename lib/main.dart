@@ -4,6 +4,7 @@ import 'database/app_database.dart';
 
 import 'screens/focusmode.dart';
 import 'screens/onboarding/onboarding_flow_screen.dart';
+import 'screens/program/program_overview_screen.dart';
 import 'screens/registration_screen.dart';
 import 'theme/app_theme.dart';
 
@@ -107,6 +108,21 @@ class _MyHomePageState extends State<MyHomePage> {
               },
               icon: const Icon(Icons.checklist_outlined),
               label: const Text('Onboarding'),
+            ),
+
+            // TEMPORARY test button for the 14-day overview. It will be
+            // replaced by the Today tab of the real navigation.
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (context) => const ProgramOverviewScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.calendar_month_outlined),
+              label: const Text('My 14 days'),
             ),
           ],
         ),

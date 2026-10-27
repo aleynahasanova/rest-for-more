@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/program_day.dart';
+import '../../services/program_service.dart';
 import '../../theme/app_colors.dart';
 import '../onboarding/onboarding_header.dart';
 
@@ -29,6 +30,17 @@ class _DailyPageScreenState extends State<DailyPageScreen> {
 
   bool get _isDone => _day.completedAt != null;
 
+  @override
+  void initState() {
+    super.initState();
+
+    // Remember that the day was opened (only the first time).
+    if (_day.openedAt == null) {
+      _day = _day.markOpened(DateTime.now());
+      _save();
+    }
+  }
+
   void _markDone() {
     setState(() {
       _day = _day.markCompleted(
@@ -36,6 +48,18 @@ class _DailyPageScreenState extends State<DailyPageScreen> {
         usedSmallerAlternative: _useSmaller,
       );
     });
+
+    _save();
+  }
+
+  /// Saves this day in the database. The fake sample days are not in the
+  /// database, so for them this changes nothing.
+  Future<void> _save() async {
+    try {
+      await ProgramService().updateProgramDay(_day);
+    } catch (error) {
+      debugPrint('Could not save the day: $error');
+    }
   }
 
   void _showSmaller() {
@@ -133,7 +157,10 @@ class _DailyPageScreenState extends State<DailyPageScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(),
+      appBar: AppBar(
+        title: const Text('Your programme'),
+        titleTextStyle: textTheme.titleSmall?.copyWith(color: AppColors.ink),
+      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -155,18 +182,23 @@ class _DailyPageScreenState extends State<DailyPageScreen> {
                         ? _day.smallerAlternative
                         : _day.primaryAction,
                   ),
-                  const SizedBox(height: 16),
-                  _SecondaryButton(
+                  const SizedBox(height: 28),
+                  const _SectionLabel('Help for today'),
+                  const SizedBox(height: 12),
+                  _ActionRow(
+                    icon: Icons.tune,
                     label: 'Make it smaller',
                     onPressed: _showSmaller,
                   ),
-                  const SizedBox(height: 12),
-                  _SecondaryButton(
+                  const SizedBox(height: 10),
+                  _ActionRow(
+                    icon: Icons.shuffle,
                     label: 'Different situation today',
                     onPressed: _showDifferentSituation,
                   ),
-                  const SizedBox(height: 12),
-                  _SecondaryButton(
+                  const SizedBox(height: 10),
+                  _ActionRow(
+                    icon: Icons.lightbulb_outline,
                     label: 'Why this step?',
                     onPressed: _showWhy,
                   ),
@@ -243,24 +275,75 @@ class _StepCard extends StatelessWidget {
   }
 }
 
-/// An outlined button, like "Stap toevoegen" in the wireframe.
-class _SecondaryButton extends StatelessWidget {
-  const _SecondaryButton({required this.label, required this.onPressed});
+/// A small capital label above a group, like "JOUW STAPPEN" in the wireframe.
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
 
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.toUpperCase(),
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: AppColors.brand,
+            letterSpacing: 1.4,
+          ),
+    );
+  }
+}
+
+/// A row with a round icon, a label and a chevron, like the rows of the
+/// settings and moment lists in the wireframe.
+class _ActionRow extends StatelessWidget {
+  const _ActionRow({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
   final String label;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size.fromHeight(52),
-        foregroundColor: AppColors.brand,
-        side: const BorderSide(color: AppColors.brand),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    final borderRadius = BorderRadius.circular(14);
+
+    return Material(
+      color: AppColors.surfaceMuted,
+      borderRadius: borderRadius,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: borderRadius,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(
+                  color: AppColors.surface,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 20, color: AppColors.brand),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.ink,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.brand),
+            ],
+          ),
+        ),
       ),
-      child: Text(label),
     );
   }
 }

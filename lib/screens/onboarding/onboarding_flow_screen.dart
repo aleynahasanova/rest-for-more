@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../../dev/dev_user.dart';
 import '../../models/onboarding_profile.dart';
 import '../../services/onboarding_service.dart';
+import '../../services/program_starter.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/id_generator.dart';
 import 'onboarding_header.dart';
+import 'onboarding_illustration.dart';
 import 'onboarding_question_page.dart';
 import 'onboarding_questions.dart';
 
@@ -131,7 +133,20 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen> {
 
     _persist();
 
+    // Make the 14-day plan after the answers are saved. It waits in the same
+    // queue, so it never runs before the profile is written.
+    final finishedProfile = _profile!;
+    _saveQueue = _saveQueue.then((_) => _startProgram(finishedProfile));
+
     Navigator.of(context).pop(true);
+  }
+
+  Future<void> _startProgram(OnboardingProfile profile) async {
+    try {
+      await ProgramStarter().startProgramIfNone(profile);
+    } catch (error) {
+      debugPrint('Could not make the 14-day plan: $error');
+    }
   }
 
   void _persist() {
@@ -285,24 +300,22 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen> {
 
     if (isIntro) {
       return const _MessagePage(
+        icon: Icons.nightlight_round,
         eyebrow: 'Welcome',
         title: 'Rest For More',
         paragraphs: [
-          'Rest For More helps you put your phone away and rest better, '
-              'one small step at a time.',
-          'A RestNest is optional. You can use the app without one.',
-          'A few quick questions help us make a plan that fits you. '
-              'You can skip any question and change your answers later.',
+          'Put your phone away and rest better, one small step at a time.',
+          '7 quick questions. Skip any you like.',
         ],
       );
     }
 
     return const _MessagePage(
+      icon: Icons.check_circle_outline,
       eyebrow: 'All set',
       title: 'Thank you!',
       paragraphs: [
-        'Your answers are saved.',
-        'Next, we use them to make your 14-day plan.',
+        'Next, we make your 14-day plan.',
       ],
     );
   }
@@ -310,11 +323,13 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen> {
 
 class _MessagePage extends StatelessWidget {
   const _MessagePage({
+    required this.icon,
     required this.eyebrow,
     required this.title,
     required this.paragraphs,
   });
 
+  final IconData icon;
   final String eyebrow;
   final String title;
   final List<String> paragraphs;
@@ -326,6 +341,8 @@ class _MessagePage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        OnboardingIllustration(icon: icon, height: 200),
+        const SizedBox(height: 24),
         OnboardingHeader(eyebrow: eyebrow, title: title),
         const SizedBox(height: 16),
         for (final paragraph in paragraphs)

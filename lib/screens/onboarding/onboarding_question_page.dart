@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
 import 'onboarding_header.dart';
+import 'onboarding_illustration.dart';
 import 'onboarding_questions.dart';
 
 /// Shows one question with its choices. Used for every choose-one question,
@@ -30,6 +31,8 @@ class OnboardingQuestionPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        OnboardingIllustration(icon: question.icon),
+        const SizedBox(height: 20),
         OnboardingHeader(
           eyebrow: eyebrow,
           title: question.title,
