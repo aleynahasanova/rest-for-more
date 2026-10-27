@@ -5,6 +5,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -15,138 +16,291 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+
     companion object {
         private const val FOCUS_CHANNEL =
             "com.example.rest_for_more/focus_notification"
-        private const val BLOCKING_CHANNEL = "rest_for_more/app_blocking"
-        private const val NOTIFICATION_CHANNEL_ID = "focus_timer"
+
+        private const val BLOCKING_CHANNEL =
+            "rest_for_more/app_blocking"
+
+        private const val NOTIFICATION_CHANNEL_ID =
+            "focus_timer"
+
         private const val NOTIFICATION_ID = 1001
+
         private const val ROUTINE_NOTIFICATION_ID = 1003
+
         private const val NOTIFICATION_PERMISSION_REQUEST = 1002
     }
 
-    private val pendingTimers = mutableMapOf<Boolean, Pair<Long, String>>()
+    private val pendingTimers =
+        mutableMapOf<Boolean, Pair<Long, String>>()
+
     private var permissionRequestPending = false
 
-    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+    override fun configureFlutterEngine(
+        flutterEngine: FlutterEngine,
+    ) {
         super.configureFlutterEngine(flutterEngine)
+
+        // ----------------------------------
+        // Existing focus/timer notifications
+        // ----------------------------------
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             FOCUS_CHANNEL,
         ).setMethodCallHandler { call, result ->
+
             when (call.method) {
-                "showFocusTimer", "showRoutineTimer" -> {
+
+                "showFocusTimer",
+                "showRoutineTimer" -> {
+
                     val finishingAt =
-                        call.argument<Number>("finishingAtMilliseconds")?.toLong()
+                        call.argument<Number>(
+                            "finishingAtMilliseconds",
+                        )?.toLong()
 
                     if (finishingAt == null) {
+
                         result.error(
                             "missing_finishing_time",
                             "A finishing timestamp is required.",
                             null,
                         )
+
                     } else {
+
                         showFocusTimerWhenAllowed(
                             finishingAt,
                             call.method == "showRoutineTimer",
-                            call.argument<String>("title") ?: "Focus Mode",
+                            call.argument<String>("title")
+                                ?: "Focus Mode",
                         )
+
                         result.success(null)
                     }
                 }
 
                 "hideFocusTimer" -> {
+
                     pendingTimers.remove(false)
-                    notificationManager().cancel(NOTIFICATION_ID)
+
+                    notificationManager()
+                        .cancel(NOTIFICATION_ID)
+
                     result.success(null)
                 }
 
                 "hideRoutineTimer" -> {
+
                     pendingTimers.remove(true)
-                    notificationManager().cancel(ROUTINE_NOTIFICATION_ID)
+
+                    notificationManager()
+                        .cancel(ROUTINE_NOTIFICATION_ID)
+
                     result.success(null)
                 }
 
                 else -> result.notImplemented()
             }
         }
+
+        // ----------------------------------
+        // App blocking / Reading Mode
+        // ----------------------------------
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             BLOCKING_CHANNEL,
         ).setMethodCallHandler { call, result ->
-            val preferences = getSharedPreferences(
-                AppBlockingService.PREFS_NAME,
-                MODE_PRIVATE,
-            )
+
+            val preferences =
+                getSharedPreferences(
+                    AppBlockingService.PREFS_NAME,
+                    MODE_PRIVATE,
+                )
 
             when (call.method) {
+
+                // Existing selected app list.
                 "setBlockedApps" -> {
-                    val apps = call.argument<List<String>>("apps") ?: emptyList()
-                    preferences.edit()
-                        .putStringSet("blocked_apps", apps.toSet())
+
+                    val apps =
+                        call.argument<List<String>>("apps")
+                            ?: emptyList()
+
+                    preferences
+                        .edit()
+                        .putStringSet(
+                            "blocked_apps",
+                            apps.toSet(),
+                        )
                         .apply()
+
                     result.success(true)
                 }
 
+                // Existing app blocking.
                 "startBlocking" -> {
-                    preferences.edit()
-                        .putBoolean("blocking_enabled", true)
+
+                    preferences
+                        .edit()
+                        .putBoolean(
+                            "blocking_enabled",
+                            true,
+                        )
                         .commit()
+
                     notifyBlockingChanged()
+
                     result.success(true)
                 }
 
                 "stopBlocking" -> {
-                    preferences.edit()
-                        .putBoolean("blocking_enabled", false)
+
+                    preferences
+                        .edit()
+                        .putBoolean(
+                            "blocking_enabled",
+                            false,
+                        )
                         .commit()
+
                     notifyBlockingChanged()
+
                     result.success(true)
                 }
 
                 "openAccessibilitySettings" -> {
-                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+
+                    startActivity(
+                        Intent(
+                            Settings.ACTION_ACCESSIBILITY_SETTINGS,
+                        ),
+                    )
+
                     result.success(true)
                 }
 
                 "isAccessibilityEnabled" -> {
-                    result.success(isBlockingServiceEnabled())
+
+                    result.success(
+                        isBlockingServiceEnabled(),
+                    )
                 }
 
+                // ----------------------------------
+                // NEW:
+                // Reading notification suppression
+                // ----------------------------------
+
+                "setNotificationSuppressionEnabled" -> {
+
+                    val enabled =
+                        call.argument<Boolean>("enabled")
+                            ?: false
+
+                    preferences
+                        .edit()
+                        .putBoolean(
+                            ReadingNotificationListenerService
+                                .PREF_NOTIFICATION_SUPPRESSION_ENABLED,
+                            enabled,
+                        )
+                        .apply()
+
+                    result.success(true)
+                }
+
+                "isNotificationAccessEnabled" -> {
+
+                    result.success(
+                        isNotificationListenerEnabled(),
+                    )
+                }
+
+                "openNotificationAccessSettings" -> {
+
+                    startActivity(
+                        Intent(
+                            Settings
+                                .ACTION_NOTIFICATION_LISTENER_SETTINGS,
+                        ),
+                    )
+
+                    result.success(true)
+                }
+
+                // ----------------------------------
+                // Existing temporary unblock system
+                // ----------------------------------
+
                 "setTemporaryUnblock" -> {
-                    val packageName = call.argument<String>("packageName")
-                    val untilEpochMs = call.argument<Number>("untilEpochMs")?.toLong()
-                    if (packageName.isNullOrBlank() || untilEpochMs == null) {
+
+                    val packageName =
+                        call.argument<String>(
+                            "packageName",
+                        )
+
+                    val untilEpochMs =
+                        call.argument<Number>(
+                            "untilEpochMs",
+                        )?.toLong()
+
+                    if (
+                        packageName.isNullOrBlank() ||
+                        untilEpochMs == null
+                    ) {
+
                         result.error(
                             "invalid_arguments",
                             "packageName and untilEpochMs are required",
                             null,
                         )
+
                     } else {
-                        preferences.edit()
+
+                        preferences
+                            .edit()
                             .putLong(
-                                AppBlockingService.unblockKey(packageName),
+                                AppBlockingService
+                                    .unblockKey(packageName),
                                 untilEpochMs,
                             )
                             .apply()
+
                         result.success(true)
                     }
                 }
 
                 "clearTemporaryUnblock" -> {
-                    val packageName = call.argument<String>("packageName")
+
+                    val packageName =
+                        call.argument<String>(
+                            "packageName",
+                        )
+
                     if (packageName.isNullOrBlank()) {
+
                         result.error(
                             "invalid_arguments",
                             "packageName is required",
                             null,
                         )
+
                     } else {
-                        preferences.edit()
-                            .remove(AppBlockingService.unblockKey(packageName))
+
+                        preferences
+                            .edit()
+                            .remove(
+                                AppBlockingService
+                                    .unblockKey(packageName),
+                            )
                             .apply()
+
                         result.success(true)
                     }
                 }
@@ -156,149 +310,398 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    // ----------------------------------
+    // Existing app blocking
+    // ----------------------------------
+
     private fun notifyBlockingChanged() {
+
         sendBroadcast(
-            Intent(AppBlockingService.ACTION_BLOCKING_CHANGED).setPackage(packageName),
+            Intent(
+                AppBlockingService.ACTION_BLOCKING_CHANGED,
+            ).setPackage(packageName),
         )
     }
 
     private fun isBlockingServiceEnabled(): Boolean {
-        val manager = getSystemService(ACCESSIBILITY_SERVICE) as AccessibilityManager
+
+        val manager =
+            getSystemService(
+                ACCESSIBILITY_SERVICE,
+            ) as AccessibilityManager
+
         if (!manager.isEnabled) {
             return false
         }
 
-        val enabledServices = Settings.Secure.getString(
-            contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-        ) ?: return false
+        val enabledServices =
+            Settings.Secure.getString(
+                contentResolver,
+                Settings.Secure
+                    .ENABLED_ACCESSIBILITY_SERVICES,
+            ) ?: return false
 
-        val serviceName = "${packageName}/${AppBlockingService::class.java.name}"
-        val shortName = "${packageName}/.${AppBlockingService::class.java.simpleName}"
-        return enabledServices.split(':').any { enabled ->
-            enabled.equals(serviceName, ignoreCase = true) ||
-                enabled.equals(shortName, ignoreCase = true)
-        }
+        val serviceName =
+            "${packageName}/${AppBlockingService::class.java.name}"
+
+        val shortName =
+            "${packageName}/.${AppBlockingService::class.java.simpleName}"
+
+        return enabledServices
+            .split(':')
+            .any { enabled ->
+
+                enabled.equals(
+                    serviceName,
+                    ignoreCase = true,
+                ) ||
+                    enabled.equals(
+                        shortName,
+                        ignoreCase = true,
+                    )
+            }
     }
 
-    private fun showFocusTimerWhenAllowed(finishingAt: Long, routine: Boolean = false, title: String = "Focus Mode") {
+    // ----------------------------------
+    // NEW:
+    // Check Notification Access
+    // ----------------------------------
+
+    private fun isNotificationListenerEnabled(): Boolean {
+
+        val componentName =
+            ComponentName(
+                this,
+                ReadingNotificationListenerService::class.java,
+            )
+
         if (
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
-                PackageManager.PERMISSION_GRANTED
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.O_MR1
         ) {
-            pendingTimers[routine] = Pair(finishingAt, title)
+
+            return notificationManager()
+                .isNotificationListenerAccessGranted(
+                    componentName,
+                )
+        }
+
+        val enabledListeners =
+            Settings.Secure.getString(
+                contentResolver,
+                "enabled_notification_listeners",
+            ) ?: return false
+
+        val fullName =
+            componentName.flattenToString()
+
+        val shortName =
+            componentName.flattenToShortString()
+
+        return enabledListeners
+            .split(':')
+            .any { enabled ->
+
+                enabled.equals(
+                    fullName,
+                    ignoreCase = true,
+                ) ||
+                    enabled.equals(
+                        shortName,
+                        ignoreCase = true,
+                    )
+            }
+    }
+
+    // ----------------------------------
+    // Existing timer notification
+    // ----------------------------------
+
+    private fun showFocusTimerWhenAllowed(
+        finishingAt: Long,
+        routine: Boolean = false,
+        title: String = "Focus Mode",
+    ) {
+
+        if (
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+
+            pendingTimers[routine] =
+                Pair(
+                    finishingAt,
+                    title,
+                )
+
             if (!permissionRequestPending) {
+
                 permissionRequestPending = true
+
                 requestPermissions(
-                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                    arrayOf(
+                        Manifest.permission
+                            .POST_NOTIFICATIONS,
+                    ),
                     NOTIFICATION_PERMISSION_REQUEST,
                 )
             }
+
             return
         }
 
-        showFocusTimer(finishingAt, routine, title)
+        showFocusTimer(
+            finishingAt,
+            routine,
+            title,
+        )
     }
 
-    private fun showFocusTimer(finishingAt: Long, routine: Boolean = false, title: String = "Focus Mode") {
-        if (finishingAt <= System.currentTimeMillis()) return
-        val remainingMilliseconds =
-            (finishingAt - System.currentTimeMillis()).coerceAtLeast(1L)
+    private fun showFocusTimer(
+        finishingAt: Long,
+        routine: Boolean = false,
+        title: String = "Focus Mode",
+    ) {
 
-        val channelId = if (routine) "routine_timer" else NOTIFICATION_CHANNEL_ID
+        if (
+            finishingAt <=
+            System.currentTimeMillis()
+        ) {
+            return
+        }
+
+        val remainingMilliseconds =
+            (
+                finishingAt -
+                    System.currentTimeMillis()
+                ).coerceAtLeast(1L)
+
+        val channelId =
+            if (routine) {
+                "routine_timer"
+            } else {
+                NOTIFICATION_CHANNEL_ID
+            }
+
         createNotificationChannel(routine)
 
-        val openAppIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val openAppPendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            openAppIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
+        val openAppIntent =
+            Intent(
+                this,
+                MainActivity::class.java,
+            ).apply {
 
-        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(this, channelId)
-        } else {
-            @Suppress("DEPRECATION")
-            Notification.Builder(this)
-        }
+                flags =
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+
+        val openAppPendingIntent =
+            PendingIntent.getActivity(
+                this,
+                0,
+                openAppIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or
+                    PendingIntent.FLAG_IMMUTABLE,
+            )
+
+        val builder =
+            if (
+                Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.O
+            ) {
+
+                Notification.Builder(
+                    this,
+                    channelId,
+                )
+
+            } else {
+
+                @Suppress("DEPRECATION")
+                Notification.Builder(this)
+            }
 
         builder
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle(if (routine) "Morning routine" else title)
-            .setContentText(
+            .setSmallIcon(
+                android.R.drawable
+                    .ic_lock_idle_alarm,
+            )
+            .setContentTitle(
                 if (routine) {
-                    "Time remaining in your morning routine."
-                } else if (title == "Reading Mode") {
-                    "Stay with the page in front of you."
+                    "Morning routine"
                 } else {
+                    title
+                },
+            )
+            .setContentText(
+
+                if (routine) {
+
+                    "Time remaining in your morning routine."
+
+                } else if (
+                    title == "Reading Mode"
+                ) {
+
+                    "Stay with the page in front of you."
+
+                } else {
+
                     "Stay with the task in front of you."
                 },
             )
-            .setContentIntent(openAppPendingIntent)
-            .setCategory(Notification.CATEGORY_STOPWATCH)
+            .setContentIntent(
+                openAppPendingIntent,
+            )
+            .setCategory(
+                Notification.CATEGORY_STOPWATCH,
+            )
             .setWhen(finishingAt)
             .setShowWhen(true)
             .setUsesChronometer(true)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            builder.setChronometerCountDown(true)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            builder.setTimeoutAfter(remainingMilliseconds)
-        }
-        if (Build.VERSION.SDK_INT >= 36) {
-            builder.extras.putBoolean("android.requestPromotedOngoing", true)
+        if (
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.N
+        ) {
+
+            builder.setChronometerCountDown(
+                true,
+            )
         }
 
-        notificationManager().notify(
-            if (routine) ROUTINE_NOTIFICATION_ID else NOTIFICATION_ID,
-            builder.build(),
-        )
+        if (
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.O
+        ) {
+
+            builder.setTimeoutAfter(
+                remainingMilliseconds,
+            )
+        }
+
+        if (
+            Build.VERSION.SDK_INT >= 36
+        ) {
+
+            builder.extras.putBoolean(
+                "android.requestPromotedOngoing",
+                true,
+            )
+        }
+
+        notificationManager()
+            .notify(
+                if (routine) {
+                    ROUTINE_NOTIFICATION_ID
+                } else {
+                    NOTIFICATION_ID
+                },
+                builder.build(),
+            )
     }
 
-    private fun createNotificationChannel(routine: Boolean = false) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+    private fun createNotificationChannel(
+        routine: Boolean = false,
+    ) {
 
-        val channel = NotificationChannel(
-            if (routine) "routine_timer" else NOTIFICATION_CHANNEL_ID,
-            if (routine) "Routine timer" else "Focus timer",
-            NotificationManager.IMPORTANCE_LOW,
-        ).apply {
-            description = if (routine) {
-                "Displays the remaining time for an active routine."
-            } else {
-                "Displays the remaining time for an active focus session."
-            }
-            setSound(null, null)
-            enableVibration(false)
+        if (
+            Build.VERSION.SDK_INT <
+            Build.VERSION_CODES.O
+        ) {
+            return
         }
-        notificationManager().createNotificationChannel(channel)
+
+        val channel =
+            NotificationChannel(
+                if (routine) {
+                    "routine_timer"
+                } else {
+                    NOTIFICATION_CHANNEL_ID
+                },
+                if (routine) {
+                    "Routine timer"
+                } else {
+                    "Focus timer"
+                },
+                NotificationManager
+                    .IMPORTANCE_LOW,
+            ).apply {
+
+                description =
+                    if (routine) {
+
+                        "Displays the remaining time for an active routine."
+
+                    } else {
+
+                        "Displays the remaining time for an active focus session."
+                    }
+
+                setSound(
+                    null,
+                    null,
+                )
+
+                enableVibration(false)
+            }
+
+        notificationManager()
+            .createNotificationChannel(
+                channel,
+            )
     }
 
     private fun notificationManager(): NotificationManager =
-        getSystemService(NotificationManager::class.java)
+        getSystemService(
+            NotificationManager::class.java,
+        )
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
         grantResults: IntArray,
     ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
-        if (requestCode != NOTIFICATION_PERMISSION_REQUEST) return
+        super.onRequestPermissionsResult(
+            requestCode,
+            permissions,
+            grantResults,
+        )
+
+        if (
+            requestCode !=
+            NOTIFICATION_PERMISSION_REQUEST
+        ) {
+            return
+        }
 
         permissionRequestPending = false
-        val timers = pendingTimers.toMap()
+
+        val timers =
+            pendingTimers.toMap()
+
         pendingTimers.clear()
-        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
-            timers.forEach { (routine, timer) ->
-                showFocusTimer(timer.first, routine, timer.second)
+
+        if (
+            grantResults.firstOrNull() ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+
+            timers.forEach {
+                (routine, timer) ->
+
+                showFocusTimer(
+                    timer.first,
+                    routine,
+                    timer.second,
+                )
             }
         }
     }

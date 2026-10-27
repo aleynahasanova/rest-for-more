@@ -22,7 +22,10 @@ class AppBlockService {
   }
 
   static Future<bool> isAccessibilityEnabled() async {
-    final enabled = await _channel.invokeMethod<bool>('isAccessibilityEnabled');
+    final enabled = await _channel.invokeMethod<bool>(
+      'isAccessibilityEnabled',
+    );
+
     return enabled ?? false;
   }
 
@@ -40,5 +43,30 @@ class AppBlockService {
     await _channel.invokeMethod('clearTemporaryUnblock', {
       'packageName': packageName,
     });
+  }
+
+  // -------------------------------
+  // Reading Mode notification access
+  // -------------------------------
+
+  static Future<void> setNotificationSuppressionEnabled(bool enabled) async {
+    await _channel.invokeMethod(
+      'setNotificationSuppressionEnabled',
+      {'enabled': enabled},
+    );
+  }
+
+  static Future<bool> isNotificationAccessEnabled() async {
+    final enabled = await _channel.invokeMethod<bool>(
+      'isNotificationAccessEnabled',
+    );
+
+    return enabled ?? false;
+  }
+
+  static Future<void> openNotificationAccessSettings() async {
+    await _channel.invokeMethod(
+      'openNotificationAccessSettings',
+    );
   }
 }
