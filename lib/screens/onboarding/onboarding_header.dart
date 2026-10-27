@@ -10,11 +10,15 @@ class OnboardingHeader extends StatelessWidget {
     this.eyebrow,
     required this.title,
     this.subtitle,
+    this.compact = false,
   });
 
   final String? eyebrow;
   final String title;
   final String? subtitle;
+
+  /// Smaller title and help text, so a whole question fits on one screen.
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -44,15 +48,17 @@ class OnboardingHeader extends StatelessWidget {
             style: textTheme.headlineMedium?.copyWith(
               fontFamily: 'serif',
               fontWeight: FontWeight.w400,
+              fontSize: compact ? 24 : null,
               color: AppColors.ink,
             ),
           ),
         ),
         if (subtitle != null) ...[
-          const SizedBox(height: 8),
+          SizedBox(height: compact ? 4 : 8),
           Text(
             subtitle,
-            style: textTheme.bodyMedium?.copyWith(color: AppColors.brand),
+            style: (compact ? textTheme.bodySmall : textTheme.bodyMedium)
+                ?.copyWith(color: AppColors.brand),
           ),
         ],
       ],

@@ -235,7 +235,18 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen> {
         if (!didPop) _goToStep(_step - 1);
       },
       child: Scaffold(
-        appBar: AppBar(),
+        appBar: AppBar(
+          actions: [
+            // Skip sits at the top, so the bottom of the screen stays small
+            // and the whole question fits without scrolling.
+            if (question != null)
+              TextButton(
+                onPressed: () => _goToStep(_step + 1),
+                child: const Text('Skip'),
+              ),
+            const SizedBox(width: 8),
+          ],
+        ),
         body: SafeArea(
           child: Column(
             children: [
@@ -265,13 +276,6 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen> {
                       ),
                       child: Text(nextLabel),
                     ),
-                    if (question != null) ...[
-                      const SizedBox(height: 4),
-                      TextButton(
-                        onPressed: () => _goToStep(_step + 1),
-                        child: const Text('Skip'),
-                      ),
-                    ],
                   ],
                 ),
               ),
