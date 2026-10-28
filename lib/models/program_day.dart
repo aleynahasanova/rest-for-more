@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// Optional morning check: "Were you able to protect your chosen moment?"
 /// A skipped check is stored as null, never as `no`.
 enum ProtectedMomentAnswer { yes, partly, no }
@@ -174,7 +176,15 @@ class ProgramDay {
       'program_id': programId,
       'day_number': dayNumber,
       'title': title,
-      'content': body,
+      // Her table has one text column for the day. All parts of the day are
+      // saved in it as JSON, so nothing is lost.
+      'content': jsonEncode({
+        'body': body,
+        'primaryAction': primaryAction,
+        'smallerAlternative': smallerAlternative,
+        'whyThisStep': whyThisStep,
+        'supportsPrimaryGoal': supportsPrimaryGoal,
+      }),
       'scheduled_date': scheduledDate ?? '',
       'timezone': timeZoneId ?? '',
       'offered_at': offeredAt?.toIso8601String(),
@@ -186,16 +196,27 @@ class ProgramDay {
   }
 
   factory ProgramDay.fromMap(Map<String, Object?> map) {
+    final content = _decodeContent(map['content']);
+
     return ProgramDay(
       programDayId: map['program_day_id'] as String,
       programId: map['program_id'] as String,
       dayNumber: map['day_number'] as int,
       title: (map['title'] as String?) ?? '',
-      body: (map['body'] ?? map['content'] ?? '') as String,
-      primaryAction: (map['primary_action'] as String?) ?? '',
-      smallerAlternative: (map['smaller_alternative'] as String?) ?? '',
-      whyThisStep: (map['why_this_step'] as String?) ?? '',
-      supportsPrimaryGoal: (map['supports_primary_goal'] as int?) == 1,
+      body: content != null
+          ? (content['body'] as String? ?? '')
+          : ((map['body'] ?? map['content'] ?? '') as String),
+      primaryAction: (content?['primaryAction'] as String?) ??
+          (map['primary_action'] as String?) ??
+          '',
+      smallerAlternative: (content?['smallerAlternative'] as String?) ??
+          (map['smaller_alternative'] as String?) ??
+          '',
+      whyThisStep: (content?['whyThisStep'] as String?) ??
+          (map['why_this_step'] as String?) ??
+          '',
+      supportsPrimaryGoal: (content?['supportsPrimaryGoal'] as bool?) ??
+          ((map['supports_primary_goal'] as int?) == 1),
       scheduledDate: _optionalText(map['scheduled_date']),
       timeZoneId: _optionalText(map['time_zone_id'] ?? map['timezone']),
       offeredAt: _parseDate(map['offered_at']),
@@ -207,6 +228,19 @@ class ProgramDay {
       createdAt: DateTime.parse(map['created_at'] as String),
       updatedAt: _parseDate(map['updated_at']),
     );
+  }
+
+  /// The saved `content` is JSON with the parts of the day. Older rows only
+  /// have plain text, and then this returns null.
+  static Map<String, dynamic>? _decodeContent(Object? value) {
+    if (value is! String || !value.trimLeft().startsWith('{')) return null;
+
+    try {
+      final decoded = jsonDecode(value);
+      return decoded is Map<String, dynamic> ? decoded : null;
+    } on FormatException {
+      return null;
+    }
   }
 
   static String? _optionalText(Object? value) {

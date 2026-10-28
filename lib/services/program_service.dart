@@ -1,12 +1,11 @@
 import '../database/app_database.dart';
-import '../database/tables/program_table.dart';
 import '../database/tables/program_day_table.dart';
+import '../database/tables/program_table.dart';
 import '../models/program.dart';
 import '../models/program_day.dart';
 
 class ProgramService {
   // CREATE
-
   Future<void> createProgram(Program program) async {
     final database = await AppDatabase.database;
 
@@ -20,7 +19,6 @@ class ProgramService {
   }
 
   // READ
-
   Future<List<Program>> getProgramsByUserId(String userId) async {
     final database = await AppDatabase.database;
 
@@ -82,44 +80,17 @@ class ProgramService {
     return result.map((map) => ProgramDay.fromMap(map)).toList();
   }
 
-  Future<ProgramDay?> getProgramDayById(String programDayId) async {
-    final database = await AppDatabase.database;
-
-    final result = await database.query(
-      ProgramDayTable.tableName,
-      where: 'program_day_id = ?',
-      whereArgs: [programDayId],
-      limit: 1,
-    );
-
-    if (result.isEmpty) {
-      return null;
-    }
-
-    return ProgramDay.fromMap(result.first);
-  }
-
-  Future<ProgramDay?> getProgramDayByNumber(
-    String programId,
-    int dayNumber,
-  ) async {
-    final database = await AppDatabase.database;
-
-    final result = await database.query(
-      ProgramDayTable.tableName,
-      where: 'program_id = ? AND day_number = ?',
-      whereArgs: [programId, dayNumber],
-      limit: 1,
-    );
-
-    if (result.isEmpty) {
-      return null;
-    }
-
-    return ProgramDay.fromMap(result.first);
-  }
-
   // UPDATE
+  Future<void> updateProgramDay(ProgramDay day) async {
+    final database = await AppDatabase.database;
+
+    await database.update(
+      ProgramDayTable.tableName,
+      day.toMap(),
+      where: 'program_day_id = ?',
+      whereArgs: [day.programDayId],
+    );
+  }
 
   Future<void> updateProgram(Program program) async {
     final database = await AppDatabase.database;
@@ -144,7 +115,6 @@ class ProgramService {
   }
 
   // DELETE
-
   Future<void> deleteProgram(String programId) async {
     final database = await AppDatabase.database;
 
