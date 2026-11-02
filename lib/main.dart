@@ -292,18 +292,18 @@ class _MyHomePageState extends State<MyHomePage> {
                 onPressed: _resetPlan,
                 child: const Text('Reset my plan (test)'),),
               ],
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (context) => const ProgramPreviewScreen(),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.calendar_view_week_outlined),
-                label: const Text('14-day programme'),
-              ),
+              // const SizedBox(height: 12),
+              // OutlinedButton.icon(
+              //   onPressed: () {
+              //     Navigator.of(context).push(
+              //       MaterialPageRoute<void>(
+              //         builder: (context) => const ProgramPreviewScreen(),
+              //       ),
+              //     );
+              //   },
+              //   icon: const Icon(Icons.calendar_view_week_outlined),
+              //   label: const Text('14-day programme'),
+              // ),
             ],
           ),
         ),

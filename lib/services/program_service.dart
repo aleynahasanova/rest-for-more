@@ -103,17 +103,6 @@ class ProgramService {
     );
   }
 
-  Future<void> updateProgramDay(ProgramDay programDay) async {
-    final database = await AppDatabase.database;
-
-    await database.update(
-      ProgramDayTable.tableName,
-      programDay.toMap(),
-      where: 'program_day_id = ?',
-      whereArgs: [programDay.programDayId],
-    );
-  }
-
   // DELETE
   Future<void> deleteProgram(String programId) async {
     final database = await AppDatabase.database;
