@@ -3,11 +3,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rest_for_more/main.dart';
 
 void main() {
-  testWidgets('App loads home screen', (WidgetTester tester) async {
+  testWidgets('App opens the login screen when nobody is logged in', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(const MyApp());
 
-    expect(find.text('Ready to put your phone aside?'), findsOneWidget);
+    // Wait for the check of a saved login to finish.
+    await tester.pumpAndSettle();
 
-    expect(find.text('Start Focus Mode'), findsOneWidget);
+    expect(find.text('Create account'), findsOneWidget);
   });
 }
