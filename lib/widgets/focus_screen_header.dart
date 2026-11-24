@@ -4,11 +4,13 @@ import '../theme/app_colors.dart';
 
 class FocusScreenHeader extends StatelessWidget {
   const FocusScreenHeader({
+    this.title = 'Focus',
     this.trailing,
     this.onBack,
     super.key,
   });
 
+  final String title;
   final Widget? trailing;
   final VoidCallback? onBack;
 
@@ -21,16 +23,20 @@ class FocusScreenHeader extends StatelessWidget {
           onPressed: onBack ?? () => Navigator.of(context).maybePop(),
         ),
         const SizedBox(width: 12),
-        Text(
-          'Focus',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: AppColors.ink,
-              ),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.w600, color: AppColors.ink),
+          ),
         ),
         if (trailing != null) ...[
-          const Spacer(),
-          trailing!,
+          const SizedBox(width: 8),
+          Flexible(
+            child: FittedBox(fit: BoxFit.scaleDown, child: trailing!),
+          ),
         ],
       ],
     );
@@ -38,10 +44,7 @@ class FocusScreenHeader extends StatelessWidget {
 }
 
 class _CircleIconButton extends StatelessWidget {
-  const _CircleIconButton({
-    required this.icon,
-    required this.onPressed,
-  });
+  const _CircleIconButton({required this.icon, required this.onPressed});
 
   final IconData icon;
   final VoidCallback onPressed;

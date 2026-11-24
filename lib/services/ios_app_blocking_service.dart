@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 /// Screen Time keeps app identities on the device; Flutter receives counts only.
 class IOSAppBlockingService {
   IOSAppBlockingService._();
+
+  static const selectionToken = 'ios_screentime';
   static const _channel = MethodChannel('rest_for_more/ios_app_blocking');
 
   static Future<bool> isAuthorized() async =>

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
 import 'onboarding_header.dart';
+import 'onboarding_illustration.dart';
 import 'onboarding_questions.dart';
 
 /// Shows one question with its choices. Used for every choose-one question,
@@ -25,27 +26,68 @@ class OnboardingQuestionPage extends StatelessWidget {
 
   final ValueChanged<String> onSelected;
 
+  // Rough sizes, used to decide how big the picture can be.
+  static const double _optionHeight = 48;
+  static const double _optionGap = 8;
+  static const double _headerHeight = 100;
+  static const double _headerWithSubtitleHeight = 125;
+  static const double _gaps = 16 + 16 + 12 + 16;
+  static const double _maxPictureHeight = 130;
+  static const double _minPictureHeight = 64;
+
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(24),
-      children: [
-        OnboardingHeader(
-          eyebrow: eyebrow,
-          title: question.title,
-          subtitle: question.subtitle,
-        ),
-        const SizedBox(height: 24),
-        for (final option in question.options)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _OptionTile(
-              label: option.label,
-              selected: option.value == selectedValue,
-              onTap: () => onSelected(option.value),
-            ),
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // The picture gets the room that is left. On a small screen it
+        // becomes smaller, or disappears, so the choices always fit without
+        // scrolling.
+        final optionsHeight =
+            question.options.length * (_optionHeight + _optionGap) * textScale;
+        final headerHeight = (question.subtitle == null
+                ? _headerHeight
+                : _headerWithSubtitleHeight) *
+            textScale;
+        final free =
+            constraints.maxHeight - optionsHeight - headerHeight - _gaps;
+        final pictureHeight = free.clamp(0.0, _maxPictureHeight);
+        final showPicture = pictureHeight >= _minPictureHeight;
+
+        // Still scrollable as a safety net (very large text).
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (showPicture) ...[
+                OnboardingIllustration(
+                  icon: question.icon,
+                  height: pictureHeight,
+                ),
+                const SizedBox(height: 12),
+              ],
+              OnboardingHeader(
+                compact: true,
+                eyebrow: eyebrow,
+                title: question.title,
+                subtitle: question.subtitle,
+              ),
+              const SizedBox(height: 16),
+              for (final option in question.options)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: _optionGap),
+                  child: _OptionTile(
+                    label: option.label,
+                    selected: option.value == selectedValue,
+                    onTap: () => onSelected(option.value),
+                  ),
+                ),
+            ],
           ),
-      ],
+        );
+      },
     );
   }
 }
@@ -79,7 +121,7 @@ class _OptionTile extends StatelessWidget {
           onTap: onTap,
           borderRadius: borderRadius,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
                 // Expanded lets long text wrap when the user uses large text.
@@ -88,13 +130,13 @@ class _OptionTile extends StatelessWidget {
                     label,
                     style: Theme.of(context)
                         .textTheme
-                        .bodyLarge
+                        .bodyMedium
                         ?.copyWith(color: textColor),
                   ),
                 ),
                 if (selected) ...[
                   const SizedBox(width: 12),
-                  Icon(Icons.check, color: textColor),
+                  Icon(Icons.check, size: 20, color: textColor),
                 ],
               ],
             ),

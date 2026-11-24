@@ -1,19 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../services/app_block_service.dart';
-
 import '../data/mock_blockable_apps.dart';
 import '../models/blockable_app.dart';
+import '../services/app_block_service.dart';
+import '../services/ios_app_blocking_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_icon_badge.dart';
 import '../widgets/focus_primary_button.dart';
 import '../widgets/focus_screen_header.dart';
-import '../services/ios_app_blocking_service.dart';
 
 class BlockAppsSelectionScreen extends StatefulWidget {
-  const BlockAppsSelectionScreen({required this.initialSelection, super.key});
+  const BlockAppsSelectionScreen({
+    required this.initialSelection,
+    this.modeTitle = 'Focus',
+    this.onSave,
+    super.key,
+  });
 
+  final String modeTitle;
+  final Future<void> Function(Set<String>)? onSave;
   final Set<String> initialSelection;
 
   @override
@@ -23,15 +29,30 @@ class BlockAppsSelectionScreen extends StatefulWidget {
 
 class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
   late Set<String> _selectedIds;
-  bool _busy = false;
+  var _saving = false;
+  var _iosBusy = false;
+  var _iosCount = 0;
 
   @override
   void initState() {
     super.initState();
     _selectedIds = Set<String>.from(widget.initialSelection);
+    if (AppBlockService.isIOS) {
+      _loadIOSCount();
+    }
   }
 
-  // Android - Toggle selected apps
+  Future<void> _loadIOSCount() async {
+    try {
+      final count = await IOSAppBlockingService.selectionCount();
+      if (mounted) {
+        setState(() => _iosCount = count);
+      }
+    } catch (_) {
+      // The picker can still be used if the count is unavailable.
+    }
+  }
+
   void _toggleApp(String id) {
     setState(() {
       if (_selectedIds.contains(id)) {
@@ -42,15 +63,20 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
     });
   }
 
-  Future<void> selectIOSApps() async {
-    if (_busy) return;
-    setState(() => _busy = true);
+  Future<void> _selectIOSApps() async {
+    if (_iosBusy) {
+      return;
+    }
+    setState(() => _iosBusy = true);
     try {
       if (!await IOSAppBlockingService.isAuthorized()) {
         await IOSAppBlockingService.requestPermission();
       }
       final count = await IOSAppBlockingService.selectApps();
-      if (mounted && count != null) Navigator.of(context).pop(<String>{});
+      if (!mounted || count == null) {
+        return;
+      }
+      setState(() => _iosCount = count);
     } on PlatformException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -62,13 +88,52 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _iosBusy = false);
+      }
     }
   }
 
-  void _saveSelection() => Navigator.of(context).pop(_selectedIds);
+  Future<void> _save() async {
+    if (_saving) {
+      return;
+    }
+    if (AppBlockService.isIOS && _iosCount == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Choose apps or categories in Screen Time first.'),
+        ),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    final snapshot = AppBlockService.isIOS
+        ? <String>{IOSAppBlockingService.selectionToken}
+        : Set<String>.from(_selectedIds);
+    try {
+      await widget.onSave?.call(snapshot);
+      if (mounted) {
+        Navigator.of(context).pop(snapshot);
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not save your selection. Please try again.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isIOS = AppBlockService.isIOS;
+
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
@@ -77,31 +142,28 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const FocusScreenHeader(),
+              FocusScreenHeader(title: widget.modeTitle),
               const SizedBox(height: 32),
-
               Text(
                 'What do you want to pause?',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontFamily: 'Georgia',
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.ink,
-                  height: 1.2,
-                ),
+                      fontFamily: 'Georgia',
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.ink,
+                      height: 1.2,
+                    ),
               ),
-
               const SizedBox(height: 8),
-
               Text(
-                'These apps will be blocked during your focus.',
-                style: Theme.of(context).textTheme.bodyLarge
-                    ?.copyWith(color: AppColors.ink.withValues(alpha: 0.65)),
+                isIOS
+                    ? 'iPhone uses Screen Time to choose the real apps and categories to pause.'
+                    : 'These apps will be blocked during ${widget.modeTitle.toLowerCase()} mode.',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: AppColors.ink.withValues(alpha: 0.65),
+                    ),
               ),
-
               const SizedBox(height: 24),
-
-              // iOS - Native Screen Time selection
-              if (AppBlockService.isIOS)
+              if (isIOS)
                 Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -111,28 +173,25 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
                         size: 48,
                         color: AppColors.ink,
                       ),
-
                       const SizedBox(height: 16),
-
                       Text(
-                        'Choose apps to pause using Screen Time',
+                        _iosCount == 0
+                            ? 'No apps or categories selected yet.'
+                            : '$_iosCount apps or categories selected.',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(color: AppColors.ink),
                       ),
-
                       const SizedBox(height: 24),
-
                       FocusPrimaryButton(
-                        label: _busy
+                        label: _iosBusy
                             ? 'Opening Screen Time...'
                             : 'Choose apps and categories',
-                        onPressed: _busy ? null : selectIOSApps,
+                        onPressed: _iosBusy ? null : _selectIOSApps,
                       ),
                     ],
                   ),
                 )
-              // Android - Existing app selection
               else
                 Expanded(
                   child: ListView.separated(
@@ -141,23 +200,23 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
                     itemBuilder: (context, index) {
                       final app = MockBlockableApps.all[index];
                       final isSelected = _selectedIds.contains(app.id);
-
                       return _AppSelectionRow(
                         app: app,
                         isSelected: isSelected,
-                        onTap: () => _toggleApp(app.id),
+                        onTap: () {
+                          if (!_saving) {
+                            _toggleApp(app.id);
+                          }
+                        },
                       );
                     },
                   ),
                 ),
-
               const SizedBox(height: 16),
-
-              if (!AppBlockService.isIOS)
-                FocusPrimaryButton(
-                  label: 'Save selection',
-                  onPressed: _saveSelection,
-                ),
+              FocusPrimaryButton(
+                label: _saving ? 'Saving…' : 'Save selection',
+                onPressed: _saving ? null : _save,
+              ),
             ],
           ),
         ),
@@ -191,17 +250,15 @@ class _AppSelectionRow extends StatelessWidget {
             children: [
               AppIconBadge(app: app),
               const SizedBox(width: 14),
-
               Expanded(
                 child: Text(
                   app.name,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.ink,
-                  ),
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.ink,
+                      ),
                 ),
               ),
-
               _SelectionIndicator(isSelected: isSelected),
             ],
           ),

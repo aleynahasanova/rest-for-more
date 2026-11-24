@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../models/user.dart';
 import '../services/user_service.dart';
 import '../theme/app_colors.dart';
+import 'registration_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({required this.onLogin, super.key});
+
+  final ValueChanged<User> onLogin;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -36,9 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final email = value.trim();
 
-    final emailPattern = RegExp(
-      r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
-    );
+    final emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
     if (!emailPattern.hasMatch(email)) {
       return 'Please enter a valid email address.';
@@ -85,9 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'No account was found with this email address.',
-            ),
+            content: Text('No account was found with this email address.'),
           ),
         );
 
@@ -101,9 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'The password you entered is incorrect.',
-            ),
+            content: Text('The password you entered is incorrect.'),
           ),
         );
 
@@ -114,17 +112,8 @@ class _LoginScreenState extends State<LoginScreen> {
         _isLoading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Login successful!',
-          ),
-        ),
-      );
-
-      Navigator.of(context).popUntil(
-        (route) => route.isFirst,
-      );
+      // Send the logged-in user to MyApp.
+      widget.onLogin(user);
     } catch (error) {
       if (!mounted) {
         return;
@@ -135,13 +124,21 @@ class _LoginScreenState extends State<LoginScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Something went wrong while logging in.',
-          ),
-        ),
+        const SnackBar(content: Text('Something went wrong while logging in.')),
       );
     }
+  }
+
+  void _openRegistration() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => RegistrationScreen(
+          // After creating an account, use the same
+          // login handler so the user is immediately logged in.
+          onAccountCreated: widget.onLogin,
+        ),
+      ),
+    );
   }
 
   @override
@@ -162,9 +159,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   'Welcome back',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.ink,
-                      ),
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.ink,
+                  ),
                 ),
 
                 const SizedBox(height: 8),
@@ -172,9 +169,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 Text(
                   'Log in to continue using Rest For More.',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.brandTint,
-                      ),
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(color: AppColors.brandTint),
                 ),
 
                 const SizedBox(height: 32),
@@ -186,9 +182,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Email',
                     hintText: 'Enter your email address',
-                    prefixIcon: Icon(
-                      Icons.email_outlined,
-                    ),
+                    prefixIcon: Icon(Icons.email_outlined),
                     border: OutlineInputBorder(),
                   ),
                   validator: _validateEmail,
@@ -203,9 +197,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: InputDecoration(
                     labelText: 'Password',
                     hintText: 'Enter your password',
-                    prefixIcon: const Icon(
-                      Icons.lock_outline,
-                    ),
+                    prefixIcon: const Icon(Icons.lock_outline),
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       onPressed: () {
@@ -229,23 +221,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 24),
 
                 FilledButton(
-                  onPressed: _isLoading
-                      ? null
-                      : () {
-                          _login();
-                        },
+                  onPressed: _isLoading ? null : _login,
                   style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 16,
-                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                   child: _isLoading
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Text(
                           'Log in',
@@ -261,16 +245,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
-                      'Don\'t have an account?',
-                    ),
+                    const Text('Don\'t have an account?'),
                     TextButton(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                      },
-                      child: const Text(
-                        'Create account',
-                      ),
+                      onPressed: _openRegistration,
+                      child: const Text('Create account'),
                     ),
                   ],
                 ),

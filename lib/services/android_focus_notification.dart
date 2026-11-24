@@ -2,21 +2,32 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class AndroidFocusNotification {
-  const AndroidFocusNotification() : _routine = false;
-  const AndroidFocusNotification.routine() : _routine = true;
+  const AndroidFocusNotification({this.title = 'Focus Mode'})
+    : _routine = false;
+  const AndroidFocusNotification.routine()
+    : _routine = true,
+      title = 'Morning routine';
   final bool _routine;
+  final String title;
 
   static const _channel = MethodChannel(
     'com.example.rest_for_more/focus_notification',
   );
 
   Future<void> show({required DateTime finishingAt}) async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    if (kIsWeb ||
+        (defaultTargetPlatform != TargetPlatform.android &&
+            defaultTargetPlatform != TargetPlatform.iOS)) {
+      return;
+    }
 
     try {
       await _channel.invokeMethod<void>(
         _routine ? 'showRoutineTimer' : 'showFocusTimer',
-        {'finishingAtMilliseconds': finishingAt.millisecondsSinceEpoch},
+        {
+          'finishingAtMilliseconds': finishingAt.millisecondsSinceEpoch,
+          'title': title,
+        },
       );
     } on MissingPluginException {
       // Platform notifications are unavailable in widget tests and old hosts.
@@ -26,7 +37,11 @@ class AndroidFocusNotification {
   }
 
   Future<void> hide() async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    if (kIsWeb ||
+        (defaultTargetPlatform != TargetPlatform.android &&
+            defaultTargetPlatform != TargetPlatform.iOS)) {
+      return;
+    }
 
     try {
       await _channel.invokeMethod<void>(

@@ -1,8 +1,7 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 
 import '../models/routine_item.dart';
+import 'countdown_controller.dart';
 
 enum RoutineRunStatus { running, paused, finished }
 
@@ -15,16 +14,13 @@ class RoutineRunController extends ChangeNotifier {
     if (steps.isEmpty || steps.any((s) => (s.durationMinutes ?? 0) <= 0)) {
       throw ArgumentError('A run requires steps with positive durations.');
     }
-    _remaining = _duration(0);
-    _endsAt = _now().add(_remaining);
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) => refresh());
+    _countdown = CountdownController(onTick: refresh, now: _now);
+    _countdown.start(_duration(0));
   }
   final List<RoutineItem> steps;
   final DateTime Function() _now;
-  Timer? _ticker;
-  DateTime? _endsAt;
+  late final CountdownController _countdown;
   int _index = 0;
-  Duration _remaining = Duration.zero;
   RoutineRunStatus _status = RoutineRunStatus.running;
   final Set<String> _completed = {};
   bool _stoppedEarly = false;
@@ -36,50 +32,40 @@ class RoutineRunController extends ChangeNotifier {
   RoutineItem get current => steps[_index];
   RoutineItem? get upcoming =>
       _index + 1 < steps.length ? steps[_index + 1] : null;
-  Duration get remaining => _remaining;
+  Duration get remaining => _countdown.remaining;
   DateTime? get finishingAt {
     if (_status != RoutineRunStatus.running) return null;
-    var end = _endsAt!;
+    var end = _countdown.deadline!;
     for (var i = _index + 1; i < steps.length; i++) {
       end = end.add(_duration(i));
     }
     return end;
   }
 
-  void suspendTicks() => _ticker?.cancel();
+  void suspendTicks() => _countdown.suspendTicks();
   void resumeTicks() {
     refresh();
-    _ticker?.cancel();
-    if (_status != RoutineRunStatus.finished) {
-      _ticker = Timer.periodic(const Duration(seconds: 1), (_) => refresh());
-    }
+    if (_status == RoutineRunStatus.running) _countdown.resumeTicks();
   }
 
   Duration _duration(int index) =>
       Duration(minutes: steps[index].durationMinutes!);
   Duration get remainingTotal {
     if (_status == RoutineRunStatus.finished) return Duration.zero;
-    var total = _remaining;
+    var total = _countdown.remaining;
     for (var i = _index + 1; i < steps.length; i++) {
       total += _duration(i);
     }
     return total;
   }
 
-  double get progress =>
-      (1 - _remaining.inMilliseconds / _duration(_index).inMilliseconds).clamp(
-        0.0,
-        1.0,
-      );
-  static String countdown(Duration value) {
-    final seconds = (value.inMilliseconds / 1000).ceil();
-    return '${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
-  }
+  double get progress => _countdown.progress;
+  static String countdown(Duration value) => CountdownController.format(value);
 
   void refresh() {
     if (_status != RoutineRunStatus.running) return;
     final now = _now();
-    while (!now.isBefore(_endsAt!)) {
+    while (!now.isBefore(_countdown.deadline!)) {
       _completed.add(current.routineItemId);
       if (_index == steps.length - 1) {
         _finish();
@@ -87,9 +73,12 @@ class RoutineRunController extends ChangeNotifier {
         return;
       }
       _index++;
-      _endsAt = _endsAt!.add(_duration(_index));
+      _countdown.start(
+        _duration(_index),
+        endingAt: _countdown.deadline!.add(_duration(_index)),
+      );
     }
-    _remaining = _endsAt!.difference(now);
+    _countdown.refresh();
     notifyListeners();
   }
 
@@ -104,8 +93,7 @@ class RoutineRunController extends ChangeNotifier {
       _finish();
     } else {
       _index++;
-      _remaining = _duration(_index);
-      _endsAt = _now().add(_remaining);
+      _countdown.start(_duration(_index));
       _status = RoutineRunStatus.running;
     }
     notifyListeners();
@@ -116,13 +104,13 @@ class RoutineRunController extends ChangeNotifier {
     refresh();
     if (_status == RoutineRunStatus.finished) return;
     _status = RoutineRunStatus.paused;
-    _endsAt = null;
+    _countdown.pause();
     notifyListeners();
   }
 
   void resume() {
     if (_status != RoutineRunStatus.paused) return;
-    _endsAt = _now().add(_remaining);
+    _countdown.resume();
     _status = RoutineRunStatus.running;
     notifyListeners();
   }
@@ -138,14 +126,12 @@ class RoutineRunController extends ChangeNotifier {
 
   void _finish() {
     _status = RoutineRunStatus.finished;
-    _remaining = Duration.zero;
-    _endsAt = null;
-    _ticker?.cancel();
+    _countdown.reset(Duration.zero);
   }
 
   @override
   void dispose() {
-    _ticker?.cancel();
+    _countdown.dispose();
     super.dispose();
   }
 }

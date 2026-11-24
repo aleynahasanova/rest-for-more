@@ -10,11 +10,17 @@ import 'unblock_duration_screen.dart';
 
 class SessionBlockedAppsScreen extends StatefulWidget {
   const SessionBlockedAppsScreen({
+    this.modeTitle = 'Focus',
+    this.isSessionActive,
+    this.onUnblocksChanged,
     required this.apps,
     required this.activeUnblocks,
     super.key,
   });
 
+  final String modeTitle;
+  final bool Function()? isSessionActive;
+  final void Function(Map<String, DateTime>)? onUnblocksChanged;
   final List<BlockableApp> apps;
   final Map<String, DateTime> activeUnblocks;
 
@@ -44,7 +50,8 @@ class _SessionBlockedAppsScreenState extends State<SessionBlockedAppsScreen> {
 
     final shouldContinue = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (context) => ContemplationScreen(appName: app.name),
+        builder: (context) =>
+            ContemplationScreen(appName: app.name, modeTitle: widget.modeTitle),
       ),
     );
     if (shouldContinue != true || !mounted) {
@@ -53,7 +60,8 @@ class _SessionBlockedAppsScreenState extends State<SessionBlockedAppsScreen> {
 
     final duration = await Navigator.of(context).push<Duration>(
       MaterialPageRoute(
-        builder: (context) => UnblockDurationScreen(app: app),
+        builder: (context) =>
+            UnblockDurationScreen(app: app, modeTitle: widget.modeTitle),
       ),
     );
     if (duration == null || !mounted) {
@@ -61,11 +69,18 @@ class _SessionBlockedAppsScreenState extends State<SessionBlockedAppsScreen> {
     }
 
     final until = DateTime.now().add(duration);
+    if (widget.isSessionActive?.call() == false) return;
     await AppBlockService.setTemporaryUnblock(
       packageName: app.packageName,
       until: until,
     );
+    if (widget.isSessionActive?.call() == false) {
+      await AppBlockService.clearTemporaryUnblock(app.packageName);
+      return;
+    }
+    if (!mounted) return;
     setState(() => _activeUnblocks[app.packageName] = until);
+    widget.onUnblocksChanged?.call(Map.of(_activeUnblocks));
   }
 
   @override
@@ -78,56 +93,56 @@ class _SessionBlockedAppsScreenState extends State<SessionBlockedAppsScreen> {
         }
       },
       child: Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              FocusScreenHeader(
-                onBack: () => Navigator.of(context).pop(_activeUnblocks),
-              ),
-              const SizedBox(height: 32),
-              Text(
-                'Which app do you want to unblock?',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontFamily: 'Georgia',
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.ink,
-                      height: 1.2,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Choose one app, then take a short pause before it becomes available.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppColors.ink.withValues(alpha: 0.65),
-                    ),
-              ),
-              const SizedBox(height: 24),
-              Expanded(
-                child: ListView.separated(
-                  itemCount: widget.apps.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
-                  itemBuilder: (context, index) {
-                    final app = widget.apps[index];
-                    final until = _activeUnblocks[app.packageName];
-                    final isUnblocked =
-                        until != null && until.isAfter(DateTime.now());
-                    return _BlockedAppRow(
-                      app: app,
-                      isTemporarilyUnblocked: isUnblocked,
-                      until: isUnblocked ? until : null,
-                      onTap: () => _startUnblockFlow(app),
-                    );
-                  },
+        backgroundColor: AppColors.surface,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FocusScreenHeader(
+                  title: widget.modeTitle,
+                  onBack: () => Navigator.of(context).pop(_activeUnblocks),
                 ),
-              ),
-            ],
+                const SizedBox(height: 32),
+                Text(
+                  'Which app do you want to unblock?',
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontFamily: 'Georgia',
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink,
+                    height: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Choose one app, then take a short pause before it becomes available.',
+                  style: Theme.of(context).textTheme.bodyLarge
+                      ?.copyWith(color: AppColors.ink.withValues(alpha: 0.65)),
+                ),
+                const SizedBox(height: 24),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: widget.apps.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final app = widget.apps[index];
+                      final until = _activeUnblocks[app.packageName];
+                      final isUnblocked =
+                          until != null && until.isAfter(DateTime.now());
+                      return _BlockedAppRow(
+                        app: app,
+                        isTemporarilyUnblocked: isUnblocked,
+                        until: isUnblocked ? until : null,
+                        onTap: () => _startUnblockFlow(app),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -171,16 +186,16 @@ class _BlockedAppRow extends StatelessWidget {
                     Text(
                       app.name,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.ink,
-                          ),
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.ink,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.ink.withValues(alpha: 0.55),
-                          ),
+                        color: AppColors.ink.withValues(alpha: 0.55),
+                      ),
                     ),
                   ],
                 ),

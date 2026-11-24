@@ -4,6 +4,7 @@ import Flutter
 import ManagedSettings
 import SwiftUI
 import UIKit
+import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -14,6 +15,7 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    UNUserNotificationCenter.current().delegate = self
     blocker.clearExpiredSession()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
@@ -21,11 +23,90 @@ import UIKit
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     guard let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "FocusAppBlocker") else { return }
+    let messenger = registrar.messenger()
     let channel = FlutterMethodChannel(
-      name: "rest_for_more/ios_app_blocking", binaryMessenger: registrar.messenger())
+      name: "rest_for_more/ios_app_blocking", binaryMessenger: messenger)
     blockingChannel = channel
     channel.setMethodCallHandler { [weak self] call, result in
       self?.blocker.handle(call, result: result)
+    }
+
+    FlutterMethodChannel(
+      name: "com.example.rest_for_more/focus_notification",
+      binaryMessenger: messenger
+    ).setMethodCallHandler { call, result in
+      FocusTimerNotifications.handle(call, result: result)
+    }
+  }
+}
+
+private enum FocusTimerNotifications {
+  private static let focusId = "focus_timer"
+  private static let routineId = "routine_timer"
+
+  static func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "showFocusTimer", "showRoutineTimer":
+      guard let args = call.arguments as? [String: Any],
+        let finishingAt = args["finishingAtMilliseconds"] as? Int
+      else {
+        result(
+          FlutterError(
+            code: "missing_finishing_time",
+            message: "A finishing timestamp is required.",
+            details: nil))
+        return
+      }
+      let title = args["title"] as? String
+      schedule(
+        id: call.method == "showRoutineTimer" ? routineId : focusId,
+        title: title ?? (call.method == "showRoutineTimer" ? "Morning routine" : "Focus Mode"),
+        finishingAt: Date(timeIntervalSince1970: TimeInterval(finishingAt) / 1000),
+        result: result)
+    case "hideFocusTimer":
+      UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [focusId])
+      UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [focusId])
+      result(nil)
+    case "hideRoutineTimer":
+      UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [routineId])
+      UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [routineId])
+      result(nil)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private static func schedule(
+    id: String,
+    title: String,
+    finishingAt: Date,
+    result: @escaping FlutterResult
+  ) {
+    let center = UNUserNotificationCenter.current()
+    center.requestAuthorization(options: [.alert, .sound]) { granted, error in
+      if let error = error {
+        result(FlutterError(code: "notification_failed", message: error.localizedDescription, details: nil))
+        return
+      }
+      guard granted else {
+        result(nil)
+        return
+      }
+      let content = UNMutableNotificationContent()
+      content.title = title
+      content.body = "Your session is complete."
+      content.sound = .default
+      let delay = max(finishingAt.timeIntervalSinceNow, 1)
+      let trigger = UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)
+      let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+      center.removePendingNotificationRequests(withIdentifiers: [id])
+      center.add(request) { error in
+        if let error = error {
+          result(FlutterError(code: "notification_failed", message: error.localizedDescription, details: nil))
+        } else {
+          result(nil)
+        }
+      }
     }
   }
 }

@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 import '../../models/onboarding_options.dart';
 import '../../models/onboarding_profile.dart';
 
@@ -15,6 +17,7 @@ class OnboardingOption {
 class OnboardingQuestion {
   const OnboardingQuestion({
     required this.title,
+    required this.icon,
     this.subtitle,
     required this.options,
     required this.readAnswer,
@@ -22,6 +25,9 @@ class OnboardingQuestion {
   });
 
   final String title;
+
+  /// The icon in the picture above the question.
+  final IconData icon;
   final String? subtitle;
   final List<OnboardingOption> options;
 
@@ -40,7 +46,7 @@ class OnboardingQuestion {
 final List<OnboardingQuestion> onboardingQuestions = [
   OnboardingQuestion(
     title: 'How old are you?',
-    subtitle: "Pick the group that fits. We don't ask for your date of birth.",
+    icon: Icons.cake_outlined,
     options: [
       OnboardingOption(AgeBand.under16.name, 'Under 16'),
       OnboardingOption(AgeBand.age16to17.name, '16 to 17'),
@@ -54,7 +60,7 @@ final List<OnboardingQuestion> onboardingQuestions = [
   ),
   OnboardingQuestion(
     title: 'What do you want most?',
-    subtitle: 'You can change this later.',
+    icon: Icons.flag_outlined,
     options: [
       OnboardingOption(
         PrimaryGoal.phoneAwayEarlier.name,
@@ -71,7 +77,7 @@ final List<OnboardingQuestion> onboardingQuestions = [
   ),
   OnboardingQuestion(
     title: 'What makes it hardest?',
-    subtitle: 'Pick the one that is true most often.',
+    icon: Icons.hourglass_empty,
     options: [
       OnboardingOption(Obstacle.scrolling.name, 'I keep scrolling'),
       OnboardingOption(
@@ -92,6 +98,7 @@ final List<OnboardingQuestion> onboardingQuestions = [
   ),
   OnboardingQuestion(
     title: 'What does your day look like?',
+    icon: Icons.wb_sunny_outlined,
     options: [
       OnboardingOption(Rhythm.regular.name, 'About the same every day'),
       OnboardingOption(Rhythm.variable.name, 'It changes from day to day'),
@@ -102,7 +109,7 @@ final List<OnboardingQuestion> onboardingQuestions = [
   ),
   OnboardingQuestion(
     title: 'How long do you want your phone away?',
-    subtitle: 'This is your own goal, not a medical rule.',
+    icon: Icons.phone_android,
     options: [
       OnboardingOption('15', '15 minutes'),
       OnboardingOption('30', '30 minutes'),
@@ -115,6 +122,7 @@ final List<OnboardingQuestion> onboardingQuestions = [
   ),
   OnboardingQuestion(
     title: 'How big should each daily step be?',
+    icon: Icons.stairs_outlined,
     options: [
       OnboardingOption(FeasibleStep.short.name, 'Small and quick'),
       OnboardingOption(FeasibleStep.standard.name, 'Normal'),
@@ -124,7 +132,7 @@ final List<OnboardingQuestion> onboardingQuestions = [
   ),
   OnboardingQuestion(
     title: 'What would you like to do instead?',
-    subtitle: 'This is what you do after you put your phone away.',
+    icon: Icons.menu_book_outlined,
     options: [
       OnboardingOption(PreferredActivity.reading.name, 'Read something'),
       OnboardingOption(

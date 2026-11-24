@@ -7,6 +7,7 @@ import '../widgets/vertical_duration_slider.dart';
 
 class UnblockDurationScreen extends StatefulWidget {
   const UnblockDurationScreen({
+    this.modeTitle = 'Focus',
     required this.app,
     super.key,
   });
@@ -14,6 +15,8 @@ class UnblockDurationScreen extends StatefulWidget {
   final BlockableApp app;
 
   static const durationOptions = [1, 5, 10, 15];
+
+  final String modeTitle;
 
   @override
   State<UnblockDurationScreen> createState() => _UnblockDurationScreenState();
@@ -42,23 +45,22 @@ class _UnblockDurationScreenState extends State<UnblockDurationScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const FocusScreenHeader(),
+              FocusScreenHeader(title: widget.modeTitle),
               const SizedBox(height: 32),
               Text(
                 'How long do you need ${widget.app.name}?',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontFamily: 'Georgia',
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.ink,
-                      height: 1.2,
-                    ),
+                  fontFamily: 'Georgia',
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.ink,
+                  height: 1.2,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
                 'You selected $_selectedMinutes minutes. This app will be available until $_untilLabel.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppColors.ink.withValues(alpha: 0.65),
-                    ),
+                style: Theme.of(context).textTheme.bodyLarge
+                    ?.copyWith(color: AppColors.ink.withValues(alpha: 0.65)),
               ),
               const SizedBox(height: 32),
               Expanded(
@@ -96,9 +98,8 @@ class _UnblockDurationScreenState extends State<UnblockDurationScreen> {
                 height: 56,
                 child: FilledButton(
                   onPressed: () {
-                    Navigator.of(context).pop(
-                      Duration(minutes: _selectedMinutes),
-                    );
+                    Navigator.of(context)
+                        .pop(Duration(minutes: _selectedMinutes));
                   },
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.accent,
@@ -110,10 +111,7 @@ class _UnblockDurationScreenState extends State<UnblockDurationScreen> {
                   ),
                   child: const Text(
                     'Unblock',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                   ),
                 ),
               ),

@@ -1,368 +1,109 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../data/mock_blockable_apps.dart';
+import '../controllers/focus_timer_controller.dart';
+import '../controllers/blocking_mode_session.dart';
 import '../models/blockable_app.dart';
-import '../services/android_focus_notification.dart';
 import '../services/app_block_service.dart';
-import '../services/ios_app_blocking_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_icon_badge.dart';
+import '../widgets/countdown_timer.dart';
 import '../widgets/focus_primary_button.dart';
 import '../widgets/focus_screen_header.dart';
 import 'block_apps_selection_screen.dart';
 import 'blocking_permissions_screen.dart';
 import 'session_blocked_apps_screen.dart';
 
-enum FocusTimerStatus { ready, running, paused, completed }
-
-class FocusTimerController extends ChangeNotifier with WidgetsBindingObserver {
-  static const minimumDurationMinutes = 1;
-  static const maximumDurationMinutes = 180;
-
-  static const setupDurationOptions = <Duration>[
-    Duration(minutes: 15),
-    Duration(minutes: 30),
-    Duration(minutes: 45),
-    Duration(minutes: 60),
-    Duration(minutes: 120),
-  ];
-
-  /// Kept for compatibility with existing timer logic.
-  static const durationOptions = setupDurationOptions;
-
-  FocusTimerController({
-    this._notification = const AndroidFocusNotification(),
-  }) {
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  final AndroidFocusNotification _notification;
-  Duration _selectedDuration = setupDurationOptions[2];
-  Duration _remaining = setupDurationOptions[2];
-  DateTime? _finishingAt;
-  Timer? _displayTimer;
-  FocusTimerStatus _status = FocusTimerStatus.ready;
-
-  Duration get selectedDuration => _selectedDuration;
-  Duration get remaining => _remaining;
-  FocusTimerStatus get status => _status;
-
-  String get formattedRemaining {
-    final totalSeconds = _remaining.inMilliseconds <= 0
-        ? 0
-        : (_remaining.inMilliseconds / 1000).ceil();
-    final minutes = totalSeconds ~/ 60;
-    final seconds = totalSeconds.remainder(60);
-    return '${minutes.toString().padLeft(2, '0')}:'
-        '${seconds.toString().padLeft(2, '0')}';
-  }
-
-  String get statusMessage => switch (_status) {
-    FocusTimerStatus.ready => 'Set aside distractions and begin.',
-    FocusTimerStatus.running => 'Working and studying without distractions',
-    FocusTimerStatus.paused => 'Your session is paused.',
-    FocusTimerStatus.completed => 'You made time for what matters.',
-  };
-
-  String get selectedDurationLabel {
-    final minutes = _selectedDuration.inMinutes;
-    if (minutes >= 60 && minutes % 60 == 0) {
-      final hours = minutes ~/ 60;
-      return hours == 1 ? '1 hour' : '$hours hours';
-    }
-    return '$minutes min';
-  }
-
-  String get startButtonLabel => 'Start $selectedDurationLabel';
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed &&
-        _status == FocusTimerStatus.running) {
-      _refreshRemainingTime();
-      if (_status == FocusTimerStatus.running) {
-        _startDisplayTimer();
-      }
-    } else if (state != AppLifecycleState.resumed) {
-      _displayTimer?.cancel();
-    }
-  }
-
-  void selectDuration(Duration duration) {
-    final minutes = duration.inMinutes;
-    final isWholeMinute = duration == Duration(minutes: minutes);
-    if (!isWholeMinute ||
-        minutes < minimumDurationMinutes ||
-        minutes > maximumDurationMinutes) {
-      throw ArgumentError.value(
-        duration,
-        'duration',
-        'Duration must be a whole number of minutes between '
-            '$minimumDurationMinutes and $maximumDurationMinutes.',
-      );
-    }
-
-    _selectedDuration = duration;
-    _remaining = duration;
-    notifyListeners();
-  }
-
-  void startSession() {
-    _remaining = _selectedDuration;
-    _finishingAt = DateTime.now().add(_remaining);
-    _status = FocusTimerStatus.running;
-    notifyListeners();
-    _startDisplayTimer();
-    unawaited(_notification.show(finishingAt: _finishingAt!));
-  }
-
-  void pauseSession() {
-    _updateRemainingFromTimestamp();
-    _displayTimer?.cancel();
-    _finishingAt = null;
-    _status = FocusTimerStatus.paused;
-    notifyListeners();
-    unawaited(_notification.hide());
-  }
-
-  void resumeSession() {
-    _finishingAt = DateTime.now().add(_remaining);
-    _status = FocusTimerStatus.running;
-    notifyListeners();
-    _startDisplayTimer();
-    unawaited(_notification.show(finishingAt: _finishingAt!));
-  }
-
-  void cancelSession() {
-    _displayTimer?.cancel();
-    _finishingAt = null;
-    _remaining = _selectedDuration;
-    _status = FocusTimerStatus.ready;
-    notifyListeners();
-    unawaited(_notification.hide());
-  }
-
-  void _startDisplayTimer() {
-    _displayTimer?.cancel();
-    _displayTimer = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) => _refreshRemainingTime(),
-    );
-  }
-
-  void _refreshRemainingTime() {
-    if (_finishingAt == null) return;
-
-    final hasFinished = _updateRemainingFromTimestamp();
-    if (hasFinished) {
-      _displayTimer?.cancel();
-      _finishingAt = null;
-      _status = FocusTimerStatus.completed;
-      unawaited(_notification.hide());
-    }
-    notifyListeners();
-  }
-
-  bool _updateRemainingFromTimestamp() {
-    final finishingAt = _finishingAt;
-    if (finishingAt == null) return false;
-
-    final difference = finishingAt.difference(DateTime.now());
-    _remaining = difference.isNegative ? Duration.zero : difference;
-    return difference <= Duration.zero;
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _displayTimer?.cancel();
-    unawaited(_notification.hide());
-    super.dispose();
-  }
-}
+export '../controllers/focus_timer_controller.dart';
 
 class FocusModeScreen extends StatefulWidget {
   const FocusModeScreen({required this.controller, super.key});
 
-  final FocusTimerController controller;
+  final BlockingModeSession controller;
 
   @override
   State<FocusModeScreen> createState() => _FocusModeScreenState();
 }
 
 class _FocusModeScreenState extends State<FocusModeScreen> {
-  late Set<String> _selectedAppIds;
-  int _iosSelectionCount = 0;
-  bool _blockingBusy = false;
-  int get _selectionCount =>
-      AppBlockService.isIOS ? _iosSelectionCount : _selectedAppIds.length;
-  final Map<String, DateTime> _temporaryUnblocks = {};
-  final Map<String, Timer> _relockTimers = {};
+  String? _loadError;
+  Set<String> get _selectedAppIds => widget.controller.selectedAppIds;
+  List<BlockableApp> get _selectedApps => widget.controller.selectedApps;
 
   @override
   void initState() {
     super.initState();
-    _selectedAppIds = Set<String>.from(MockBlockableApps.defaultSelectedIds);
-    widget.controller.addListener(_onTimerChanged);
-    if (AppBlockService.isIOS) unawaited(_refreshIOSSelection());
+    _loadSelection();
   }
 
-  @override
-  void dispose() {
-    widget.controller.removeListener(_onTimerChanged);
-    for (final timer in _relockTimers.values) {
-      timer.cancel();
-    }
-    super.dispose();
-  }
-
-  void _onTimerChanged() {
-    if (widget.controller.status == FocusTimerStatus.completed) {
-      unawaited(_runBlockingAction(_stopBlocking));
-    }
-  }
-
-  List<BlockableApp> get _selectedApps => MockBlockableApps.all
-      .where((app) => _selectedAppIds.contains(app.id))
-      .toList();
-
-  void _showBlockingError(Object error) {
-    if (!mounted) return;
-    final message = error is PlatformException ? error.message : null;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message ?? 'Could not update app blocking. Please try again.',
-        ),
-      ),
-    );
-  }
-
-  Future<void> _refreshIOSSelection() async {
+  Future<void> _loadSelection() async {
+    setState(() => _loadError = null);
     try {
-      final count = await IOSAppBlockingService.selectionCount();
-      if (mounted) setState(() => _iosSelectionCount = count);
-    } on Exception catch (error) {
-      _showBlockingError(error);
+      await widget.controller.loadSelection();
+      if (mounted) setState(() {});
+    } catch (_) {
+      if (mounted) {
+        setState(() => _loadError = 'Could not load your app selection.');
+      }
+    }
+  }
+
+  Future<void> _runAction(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (error) {
+      if (!mounted) return;
+      final message = error is StateError
+          ? error.message.toString()
+          : 'Could not update your session. Please try again.';
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
   Future<void> _openAppSelection() async {
     final result = await Navigator.of(context).push<Set<String>>(
       MaterialPageRoute(
-        builder: (context) =>
-            BlockAppsSelectionScreen(initialSelection: _selectedAppIds),
+        builder: (context) => BlockAppsSelectionScreen(
+          initialSelection: _selectedAppIds,
+          modeTitle: widget.controller.mode.title,
+          onSave: widget.controller.saveSelection,
+        ),
       ),
     );
-
-    if (!mounted) return;
-    if (AppBlockService.isIOS) await _refreshIOSSelection();
-    if (result != null && mounted) {
-      setState(() => _selectedAppIds = result);
-    }
+    if (result != null && mounted) setState(() {});
   }
 
-  Future<void> _startFocus() => _runBlockingAction(_startFocusImpl);
-  Future<void> _pauseFocus() => _runBlockingAction(_pauseFocusImpl);
-  Future<void> _resumeFocus() => _runBlockingAction(_resumeFocusImpl);
-  Future<void> _stopFocus() => _runBlockingAction(_stopFocusImpl);
-
-  Future<void> _runBlockingAction(Future<void> Function() action) async {
-    if (_blockingBusy) return;
-    _blockingBusy = true;
-    try {
-      await action();
-    } on Exception catch (error) {
-      _showBlockingError(error);
-    } finally {
-      _blockingBusy = false;
-    }
-  }
-
-  Future<void> _startFocusImpl() async {
+  Future<void> _startFocus() => _runAction(() async {
     final accessibilityEnabled = await AppBlockService.isAccessibilityEnabled();
     if (!mounted) return;
-
     if (!accessibilityEnabled) {
       final granted = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
-          builder: (context) => const BlockingPermissionsScreen(),
+          builder: (context) => BlockingPermissionsScreen(
+            modeTitle: widget.controller.mode.title,
+          ),
         ),
       );
-      if (granted != true || !mounted) {
-        return;
-      }
+      if (granted != true || !mounted) return;
     }
+    await widget.controller.startBlockingSession();
+  });
 
-    await AppBlockService.setBlockedApps(
-      _selectedApps.map((app) => app.packageName).toList(),
-    );
-    await AppBlockService.startBlocking(
-      duration: widget.controller.selectedDuration,
-    );
-    if (mounted) widget.controller.startSession();
-  }
-
-  Future<void> _pauseFocusImpl() async {
-    await AppBlockService.stopBlocking();
-    widget.controller.pauseSession();
-  }
-
-  Future<void> _resumeFocusImpl() async {
-    await AppBlockService.startBlocking(duration: widget.controller.remaining);
-    if (mounted) widget.controller.resumeSession();
-  }
-
-  Future<void> _stopFocusImpl() async {
-    await _stopBlocking();
-    widget.controller.cancelSession();
-  }
-
-  Future<void> _stopBlocking() async {
-    for (final timer in _relockTimers.values) {
-      timer.cancel();
-    }
-    _relockTimers.clear();
-
-    for (final packageName in _temporaryUnblocks.keys) {
-      await AppBlockService.clearTemporaryUnblock(packageName);
-    }
-    _temporaryUnblocks.clear();
-    await AppBlockService.stopBlocking();
-  }
-
-  void _scheduleRelock(String packageName, DateTime until) {
-    _relockTimers[packageName]?.cancel();
-    final delay = until.difference(DateTime.now());
-    if (delay.isNegative) {
-      return;
-    }
-
-    _relockTimers[packageName] = Timer(delay, () async {
-      await AppBlockService.clearTemporaryUnblock(packageName);
-      if (!mounted) return;
-      setState(() => _temporaryUnblocks.remove(packageName));
-    });
-  }
+  Future<void> _pauseFocus() =>
+      _runAction(widget.controller.pauseBlockingSession);
+  Future<void> _resumeFocus() =>
+      _runAction(widget.controller.resumeBlockingSession);
+  Future<void> _stopFocus() =>
+      _runAction(widget.controller.stopBlockingSession);
 
   Future<void> _openBlockedAppsManager() async {
     if (AppBlockService.isIOS) {
-      await showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Screen Time blocking'),
-          content: const Text(
-            'Your selected apps and categories are paused by Screen Time. Pause the focus session to access them, or stop it to change your selection.',
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'On iPhone, paused apps are managed with Screen Time. Per-app unblock is available on Android.',
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
         ),
       );
       return;
@@ -371,21 +112,19 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
       MaterialPageRoute(
         builder: (context) => SessionBlockedAppsScreen(
           apps: _selectedApps,
-          activeUnblocks: _temporaryUnblocks,
+          activeUnblocks: widget.controller.temporaryUnblocks,
+          modeTitle: widget.controller.mode.title,
+          isSessionActive: () =>
+              widget.controller.status == FocusTimerStatus.running ||
+              widget.controller.status == FocusTimerStatus.paused,
+          onUnblocksChanged: widget.controller.updateTemporaryUnblocks,
         ),
       ),
     );
-    if (result == null || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _temporaryUnblocks
-        ..clear()
-        ..addAll(result);
-    });
-    for (final entry in result.entries) {
-      _scheduleRelock(entry.key, entry.value);
+    if (result != null &&
+        (widget.controller.status == FocusTimerStatus.running ||
+            widget.controller.status == FocusTimerStatus.paused)) {
+      widget.controller.updateTemporaryUnblocks(result);
     }
   }
 
@@ -394,27 +133,50 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
     return ListenableBuilder(
       listenable: widget.controller,
       builder: (context, _) {
-        return switch (widget.controller.status) {
-          FocusTimerStatus.ready => _FocusSetupView(
-            controller: widget.controller,
-            selectedApps: _selectedApps,
-            selectedCount: _selectionCount,
-            onChangeApps: _openAppSelection,
-            onStart: _startFocus,
-          ),
-          FocusTimerStatus.running ||
-          FocusTimerStatus.paused => _FocusActiveView(
-            controller: widget.controller,
-            pausedAppCount: _selectionCount,
-            onPause: _pauseFocus,
-            onResume: _resumeFocus,
-            onStop: _stopFocus,
-            onManageApps: _openBlockedAppsManager,
-          ),
-          FocusTimerStatus.completed => _FocusCompletedView(
-            controller: widget.controller,
-          ),
-        };
+        if (!widget.controller.selectionLoaded) {
+          return Scaffold(
+            appBar: AppBar(title: Text('${widget.controller.mode.title} Mode')),
+            body: Center(
+              child: _loadError == null
+                  ? const CircularProgressIndicator()
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_loadError!),
+                        TextButton(
+                          onPressed: _loadSelection,
+                          child: const Text('Try again'),
+                        ),
+                      ],
+                    ),
+            ),
+          );
+        }
+        return AbsorbPointer(
+          absorbing: widget.controller.busy,
+          child: switch (widget.controller.status) {
+            FocusTimerStatus.ready => _FocusSetupView(
+              controller: widget.controller,
+              selectedApps: _selectedApps,
+              selectedCount: widget.controller.appsToPauseCount,
+              onChangeApps: _openAppSelection,
+              onStart: _startFocus,
+            ),
+            FocusTimerStatus.running ||
+            FocusTimerStatus.paused => _FocusActiveView(
+              controller: widget.controller,
+              pausedAppCount: widget.controller.appsToPauseCount,
+              onPause: _pauseFocus,
+              onResume: _resumeFocus,
+              onStop: _stopFocus,
+              onManageApps: _openBlockedAppsManager,
+            ),
+            FocusTimerStatus.completed => _FocusCompletedView(
+              controller: widget.controller,
+              onRestart: _stopFocus,
+            ),
+          },
+        );
       },
     );
   }
@@ -429,7 +191,7 @@ class _FocusSetupView extends StatelessWidget {
     required this.onStart,
   });
 
-  final FocusTimerController controller;
+  final BlockingModeSession controller;
   final List<BlockableApp> selectedApps;
   final int selectedCount;
   final VoidCallback onChangeApps;
@@ -445,13 +207,12 @@ class _FocusSetupView extends StatelessWidget {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: _SessionColumn(
             children: [
-              const FocusScreenHeader(),
+              FocusScreenHeader(title: controller.mode.title),
               const SizedBox(height: 32),
               Text(
-                'How long do you want to focus?',
+                'How long do you want to ${controller.mode.activity}?',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   fontFamily: 'Georgia',
                   fontWeight: FontWeight.w600,
@@ -565,7 +326,7 @@ class _FocusSetupView extends StatelessWidget {
 class _DurationGrid extends StatelessWidget {
   const _DurationGrid({required this.controller});
 
-  final FocusTimerController controller;
+  final BlockingModeSession controller;
 
   String _labelFor(Duration duration) {
     final minutes = duration.inMinutes;
@@ -705,13 +466,16 @@ class _AppsToPauseCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           child: Row(
             children: [
-              if (AppBlockService.isIOS)
-                const Icon(Icons.phone_iphone, color: AppColors.ink)
-              else if (selectedApps.isEmpty)
+              if (selectedApps.isEmpty && selectedCount == 0)
                 Text(
                   'No apps selected',
                   style: Theme.of(context).textTheme.bodyLarge
                       ?.copyWith(color: AppColors.ink.withValues(alpha: 0.65)),
+                )
+              else if (selectedApps.isEmpty)
+                Icon(
+                  Icons.phone_iphone,
+                  color: AppColors.ink.withValues(alpha: 0.6),
                 )
               else
                 SizedBox(
@@ -732,9 +496,7 @@ class _AppsToPauseCard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  AppBlockService.isIOS
-                      ? '$selectedCount Screen Time selections'
-                      : selectedCount == 1
+                  selectedCount == 1
                       ? '1 app selected'
                       : '$selectedCount apps selected',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -769,7 +531,7 @@ class _FocusActiveView extends StatelessWidget {
     required this.onManageApps,
   });
 
-  final FocusTimerController controller;
+  final BlockingModeSession controller;
   final int pausedAppCount;
   final VoidCallback onPause;
   final VoidCallback onResume;
@@ -785,10 +547,10 @@ class _FocusActiveView extends StatelessWidget {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: _SessionColumn(
             children: [
               FocusScreenHeader(
+                title: controller.mode.title,
                 trailing: Text(
                   'of ${controller.selectedDurationLabel}',
                   style: Theme.of(context).textTheme.bodyMedium
@@ -796,10 +558,13 @@ class _FocusActiveView extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              _TimerDisplay(time: controller.formattedRemaining),
+              CountdownTimer(
+                remaining: controller.remaining,
+                progress: controller.progress,
+              ),
               const SizedBox(height: 20),
               Text(
-                controller.statusMessage,
+                controller.cleanupError ?? controller.statusMessage,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyLarge
                     ?.copyWith(color: AppColors.ink.withValues(alpha: 0.7)),
@@ -830,40 +595,6 @@ class _FocusActiveView extends StatelessWidget {
   }
 }
 
-class _TimerDisplay extends StatelessWidget {
-  const _TimerDisplay({required this.time});
-
-  final String time;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        width: 260,
-        height: 260,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: AppColors.ink.withValues(alpha: 0.15),
-            width: 2,
-          ),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          time,
-          style: Theme.of(context).textTheme.displayLarge?.copyWith(
-            fontFamily: 'Georgia',
-            fontWeight: FontWeight.w300,
-            fontSize: 56,
-            letterSpacing: 1,
-            color: AppColors.ink,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _PausedAppsBadge extends StatelessWidget {
   const _PausedAppsBadge({required this.count, required this.onTap});
 
@@ -872,11 +603,7 @@ class _PausedAppsBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = AppBlockService.isIOS
-        ? '$count Screen Time selections'
-        : count == 1
-        ? '1 app paused'
-        : '$count apps paused';
+    final label = count == 1 ? '1 app paused' : '$count apps paused';
 
     return Material(
       color: AppColors.surfaceMuted,
@@ -911,9 +638,13 @@ class _PausedAppsBadge extends StatelessWidget {
 }
 
 class _FocusCompletedView extends StatelessWidget {
-  const _FocusCompletedView({required this.controller});
+  const _FocusCompletedView({
+    required this.controller,
+    required this.onRestart,
+  });
 
-  final FocusTimerController controller;
+  final BlockingModeSession controller;
+  final VoidCallback onRestart;
 
   @override
   Widget build(BuildContext context) {
@@ -922,13 +653,12 @@ class _FocusCompletedView extends StatelessWidget {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: _SessionColumn(
             children: [
-              const FocusScreenHeader(),
+              FocusScreenHeader(title: controller.mode.title),
               const Spacer(),
               Text(
-                'Focus session complete',
+                '${controller.mode.title} session complete',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   fontFamily: 'Georgia',
@@ -938,15 +668,17 @@ class _FocusCompletedView extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                controller.statusMessage,
+                controller.cleanupError ?? controller.statusMessage,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyLarge
                     ?.copyWith(color: AppColors.ink.withValues(alpha: 0.65)),
               ),
               const Spacer(),
               FocusPrimaryButton(
-                label: 'Start another session',
-                onPressed: controller.cancelSession,
+                label: controller.cleanupError == null
+                    ? 'Start another session'
+                    : 'Release blocked apps',
+                onPressed: onRestart,
               ),
             ],
           ),
@@ -954,4 +686,25 @@ class _FocusCompletedView extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Keeps the session controls reachable on short screens and large text sizes.
+class _SessionColumn extends StatelessWidget {
+  const _SessionColumn({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => SingleChildScrollView(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: constraints.maxHeight),
+        child: IntrinsicHeight(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: children,
+          ),
+        ),
+      ),
+    ),
+  );
 }
