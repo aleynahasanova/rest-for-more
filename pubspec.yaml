@@ -39,6 +39,10 @@ dependencies:
   http: ^1.6.0
   shared_preferences: ^2.5.3
 
+dependency_overrides:
+  # 2.5.x pulls package:jni, which needs the Android NDK and breaks AGP 9.
+  shared_preferences_android: 2.4.13
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
