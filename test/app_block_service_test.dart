@@ -87,10 +87,12 @@ void main() {
     await AppBlockService.setBlockedApps(['com.example.app']);
     await AppBlockService.startBlocking(duration: const Duration(minutes: 25));
     await AppBlockService.stopBlocking();
+    expect(await AppBlockService.getInstalledApps(), isEmpty);
     expect(calls.map((call) => call.method), [
       'setBlockedApps',
       'startBlocking',
       'stopBlocking',
+      'getInstalledApps',
     ]);
     expect(calls.first.arguments, {
       'apps': ['com.example.app'],

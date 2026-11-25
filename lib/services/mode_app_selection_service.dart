@@ -4,6 +4,7 @@ import '../database/app_database.dart';
 import '../data/mock_blockable_apps.dart';
 import '../models/blocking_mode.dart';
 import '../utils/id_generator.dart';
+import 'installed_apps_service.dart';
 
 /// Independent saved selections, using the existing modes/blocked-app tables.
 class ModeAppSelectionService {
@@ -77,19 +78,16 @@ class ModeAppSelectionService {
         where: 'mode_id = ? AND deleted_at IS NULL',
         whereArgs: [id],
       );
-      final packages = rows.map((row) => row['app_identifier']).toSet();
-      return MockBlockableApps.all
-          .where((app) => packages.contains(app.packageName))
-          .map((app) => app.id)
-          .toSet();
+      final packages = rows
+          .map((row) => row['app_identifier'])
+          .whereType<String>()
+          .where((package) => package.isNotEmpty);
+      return packages.map(MockBlockableApps.idForPackage).toSet();
     });
   }
 
   Future<void> save(BlockingMode mode, Set<String> selectedIds) async {
-    final knownIds = MockBlockableApps.all.map((app) => app.id).toSet();
-    if (!knownIds.containsAll(selectedIds)) {
-      throw ArgumentError('Unknown app selection');
-    }
+    final selected = selectedIds.where((id) => id.isNotEmpty).toSet();
     final db = await _databaseProvider();
     await db.transaction((txn) async {
       final id = await _ensureMode(txn, mode);
@@ -100,9 +98,8 @@ class ModeAppSelectionService {
         where: 'mode_id = ?',
         whereArgs: [id],
       );
-      for (final app in MockBlockableApps.all.where(
-        (app) => selectedIds.contains(app.id),
-      )) {
+      for (final selectedId in selected) {
+        final app = InstalledAppsService.resolve(selectedId);
         final rows = await txn.query(
           'mode_blocked_apps',
           where: 'mode_id = ? AND app_identifier = ?',
@@ -119,7 +116,11 @@ class ModeAppSelectionService {
         } else {
           await txn.update(
             'mode_blocked_apps',
-            {'deleted_at': null, 'sync_status': 'PENDING'},
+            {
+              'deleted_at': null,
+              'sync_status': 'PENDING',
+              'app_name': app.name,
+            },
             where: 'mode_blocked_app_id = ?',
             whereArgs: [rows.first['mode_blocked_app_id']],
           );

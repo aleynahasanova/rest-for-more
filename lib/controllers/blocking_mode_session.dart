@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import '../data/mock_blockable_apps.dart';
 import '../models/blockable_app.dart';
 import '../models/blocking_mode.dart';
 import '../services/android_focus_notification.dart';
 import '../services/app_block_service.dart';
+import '../services/installed_apps_service.dart';
 import '../services/ios_app_blocking_service.dart';
 import '../services/mode_app_selection_service.dart';
 import 'focus_timer_controller.dart';
@@ -71,12 +71,9 @@ class BlockingModeSession extends FocusTimerController {
   Map<String, DateTime> get temporaryUnblocks =>
       Map.unmodifiable(_temporaryUnblocks);
 
-  List<BlockableApp> get selectedApps =>
-      MockBlockableApps.all
-          .where(
-            (app) => _selectedAppIds.contains(app.id),
-          )
-          .toList();
+  List<BlockableApp> get selectedApps => [
+        for (final id in _selectedAppIds) InstalledAppsService.resolve(id),
+      ];
 
   int get appsToPauseCount {
     if (AppBlockService.isIOS) {
@@ -110,6 +107,7 @@ class BlockingModeSession extends FocusTimerController {
       return;
     }
 
+    await InstalledAppsService.load();
     _selectedAppIds =
         await _selections.load(mode);
 

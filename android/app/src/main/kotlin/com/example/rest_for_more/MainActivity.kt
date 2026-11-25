@@ -125,6 +125,10 @@ class MainActivity : FlutterActivity() {
 
             when (call.method) {
 
+                "getInstalledApps" -> {
+                    result.success(installedLauncherApps())
+                }
+
                 // Existing selected app list.
                 "setBlockedApps" -> {
 
@@ -662,6 +666,36 @@ class MainActivity : FlutterActivity() {
         getSystemService(
             NotificationManager::class.java,
         )
+
+    private fun installedLauncherApps(): List<Map<String, Any?>> {
+        val launcherIntent = Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_LAUNCHER)
+        val resolved = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            packageManager.queryIntentActivities(
+                launcherIntent,
+                PackageManager.ResolveInfoFlags.of(0),
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.queryIntentActivities(launcherIntent, 0)
+        }
+
+        return resolved
+            .map { it.activityInfo.applicationInfo }
+            .distinctBy { it.packageName }
+            .filter { it.packageName != packageName }
+            .sortedBy {
+                packageManager.getApplicationLabel(it).toString().lowercase()
+            }
+            .mapNotNull { info ->
+                runCatching {
+                    hashMapOf(
+                        "packageName" to info.packageName,
+                        "name" to packageManager.getApplicationLabel(info).toString(),
+                    )
+                }.getOrNull()
+            }
+    }
 
     override fun onRequestPermissionsResult(
         requestCode: Int,

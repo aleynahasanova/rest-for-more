@@ -53,4 +53,27 @@ abstract final class MockBlockableApps {
     'tiktok',
     'youtube',
   };
+
+  static BlockableApp? byId(String id) {
+    for (final app in all) {
+      if (app.id == id) {
+        return app;
+      }
+    }
+    return null;
+  }
+
+  static BlockableApp? byPackage(String packageName) {
+    for (final app in all) {
+      if (app.packageName == packageName) {
+        return app;
+      }
+    }
+    return null;
+  }
+
+  static String idForPackage(String packageName) =>
+      byPackage(packageName)?.id ?? packageName;
+
+  static String packageForId(String id) => byId(id)?.packageName ?? id;
 }

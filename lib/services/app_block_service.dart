@@ -11,6 +11,20 @@ class AppBlockService {
     'rest_for_more/app_blocking',
   );
 
+  static Future<List<Map<Object?, Object?>>> getInstalledApps() async {
+    if (isIOS) {
+      return const [];
+    }
+    final apps = await _invokeAndroid<List<dynamic>>('getInstalledApps');
+    if (apps == null) {
+      return const [];
+    }
+    return [
+      for (final app in apps)
+        if (app is Map) Map<Object?, Object?>.from(app),
+    ];
+  }
+
   static Future<void> setBlockedApps(List<String> apps) async {
     if (isIOS) {
       return;

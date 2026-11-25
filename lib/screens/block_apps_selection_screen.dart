@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../data/mock_blockable_apps.dart';
 import '../models/blockable_app.dart';
 import '../services/app_block_service.dart';
+import '../services/installed_apps_service.dart';
 import '../services/ios_app_blocking_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_icon_badge.dart';
@@ -32,6 +32,10 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
   var _saving = false;
   var _iosBusy = false;
   var _iosCount = 0;
+  var _loadingApps = !AppBlockService.isIOS;
+  var _appsError = false;
+  var _query = '';
+  List<BlockableApp> _apps = const [];
 
   @override
   void initState() {
@@ -39,6 +43,31 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
     _selectedIds = Set<String>.from(widget.initialSelection);
     if (AppBlockService.isIOS) {
       _loadIOSCount();
+    } else {
+      _loadInstalledApps();
+    }
+  }
+
+  Future<void> _loadInstalledApps() async {
+    try {
+      final apps = await InstalledAppsService.load();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _apps = apps;
+        _loadingApps = false;
+        _appsError = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _apps = InstalledAppsService.apps;
+        _loadingApps = false;
+        _appsError = _apps.isEmpty;
+      });
     }
   }
 
@@ -53,12 +82,52 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
     }
   }
 
+  List<BlockableApp> get _filteredApps {
+    final query = _query.trim().toLowerCase();
+    if (query.isEmpty) {
+      return _apps;
+    }
+    return [
+      for (final app in _apps)
+        if (app.name.toLowerCase().contains(query)) app,
+    ];
+  }
+
   void _toggleApp(String id) {
     setState(() {
       if (_selectedIds.contains(id)) {
         _selectedIds.remove(id);
       } else {
         _selectedIds.add(id);
+      }
+    });
+  }
+
+  bool _areAllSelected(List<BlockableApp> apps) {
+    if (apps.isEmpty) {
+      return false;
+    }
+    for (final app in apps) {
+      if (!_selectedIds.contains(app.id)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void _toggleSelectAll(List<BlockableApp> apps) {
+    if (_saving || apps.isEmpty) {
+      return;
+    }
+    setState(() {
+      if (_areAllSelected(apps)) {
+        for (final app in apps) {
+          _selectedIds.remove(app.id);
+        }
+      } else {
+        for (final app in apps) {
+          _selectedIds.add(app.id);
+        }
       }
     });
   }
@@ -133,6 +202,7 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
   @override
   Widget build(BuildContext context) {
     final isIOS = AppBlockService.isIOS;
+    final filteredApps = _filteredApps;
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -194,23 +264,103 @@ class _BlockAppsSelectionScreenState extends State<BlockAppsSelectionScreen> {
                 )
               else
                 Expanded(
-                  child: ListView.separated(
-                    itemCount: MockBlockableApps.all.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      final app = MockBlockableApps.all[index];
-                      final isSelected = _selectedIds.contains(app.id);
-                      return _AppSelectionRow(
-                        app: app,
-                        isSelected: isSelected,
-                        onTap: () {
-                          if (!_saving) {
-                            _toggleApp(app.id);
-                          }
-                        },
-                      );
-                    },
-                  ),
+                  child: _loadingApps
+                      ? const Center(child: CircularProgressIndicator())
+                      : _appsError
+                          ? Center(
+                              child: TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _loadingApps = true;
+                                    _appsError = false;
+                                  });
+                                  _loadInstalledApps();
+                                },
+                                child: const Text(
+                                  'Could not load apps. Try again',
+                                ),
+                              ),
+                            )
+                          : Column(
+                              children: [
+                                TextField(
+                                  onChanged: (value) {
+                                    setState(() => _query = value);
+                                  },
+                                  textInputAction: TextInputAction.search,
+                                  decoration: InputDecoration(
+                                    hintText: 'Search apps',
+                                    prefixIcon: const Icon(Icons.search),
+                                    filled: true,
+                                    fillColor: AppColors.surfaceMuted,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton(
+                                    onPressed:
+                                        _saving || filteredApps.isEmpty
+                                            ? null
+                                            : () =>
+                                                _toggleSelectAll(filteredApps),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: AppColors.ink,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      _areAllSelected(filteredApps)
+                                          ? 'Deselect all'
+                                          : 'Select all',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Expanded(
+                                  child: filteredApps.isEmpty
+                                      ? Center(
+                                          child: Text(
+                                            'No apps match your search.',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyLarge
+                                                ?.copyWith(
+                                                  color: AppColors.ink
+                                                      .withValues(alpha: 0.65),
+                                                ),
+                                          ),
+                                        )
+                                      : ListView.separated(
+                                          itemCount: filteredApps.length,
+                                          separatorBuilder: (_, _) =>
+                                              const SizedBox(height: 10),
+                                          itemBuilder: (context, index) {
+                                            final app = filteredApps[index];
+                                            return _AppSelectionRow(
+                                              app: app,
+                                              isSelected:
+                                                  _selectedIds.contains(app.id),
+                                              onTap: () {
+                                                if (!_saving) {
+                                                  _toggleApp(app.id);
+                                                }
+                                              },
+                                            );
+                                          },
+                                        ),
+                                ),
+                              ],
+                            ),
                 ),
               const SizedBox(height: 16),
               FocusPrimaryButton(

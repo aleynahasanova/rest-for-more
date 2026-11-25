@@ -72,12 +72,8 @@ void main() {
       await service.save(BlockingMode.reading, {'instagram'});
       expect(await reopened.load(BlockingMode.reading), {'instagram'});
       expect(await db.query('modes'), hasLength(2));
-      final before = await reopened.load(BlockingMode.reading);
-      await expectLater(
-        service.save(BlockingMode.reading, {'unknown'}),
-        throwsArgumentError,
-      );
-      expect(await reopened.load(BlockingMode.reading), before);
+      await service.save(BlockingMode.reading, {'com.whatsapp'});
+      expect(await reopened.load(BlockingMode.reading), {'com.whatsapp'});
     },
   );
 
@@ -102,7 +98,10 @@ void main() {
       addTearDown(focus.dispose);
       reading.selectDuration(const Duration(minutes: 1));
       await reading.startBlockingSession();
-      expect(calls.first.arguments, {
+      final startedApps = calls.firstWhere(
+        (call) => call.method == 'setBlockedApps',
+      );
+      expect(startedApps.arguments, {
         'apps': ['com.instagram.android'],
       });
       final count = calls.length;
