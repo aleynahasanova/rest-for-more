@@ -12,38 +12,35 @@ import 'services/session_store.dart';
 import 'services/user_service.dart';
 import 'theme/app_theme.dart';
 
+import 'package:flutter/services.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await AppDatabase.database;
 
-  runApp(
-    const MyApp(),
-  );
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+
+  runApp(const MyApp());
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({
-    super.key,
-  });
+  const MyApp({super.key});
 
   @override
-  State<MyApp> createState() =>
-      _MyAppState();
+  State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> {
-  late final BlockingModeSession
-      _focusTimerController;
+  late final BlockingModeSession _focusTimerController;
 
-  late final BlockingModeSession
-      _readingSession;
+  late final BlockingModeSession _readingSession;
 
-  late final MorningRoutineSession
-      _morningSession;
+  late final MorningRoutineSession _morningSession;
 
-  late final NightRoutineSession
-      _nightSession;
+  late final NightRoutineSession _nightSession;
 
   final SessionStore _sessionStore = SessionStore();
 
@@ -58,26 +55,21 @@ class _MyAppState extends State<MyApp> {
 
     _restoreLogin();
 
-    final coordinator =
-        BlockingSessionCoordinator();
+    final coordinator = BlockingSessionCoordinator();
 
-    _focusTimerController =
-        BlockingModeSession(
+    _focusTimerController = BlockingModeSession(
       mode: BlockingMode.focus,
       coordinator: coordinator,
     );
 
-    _readingSession =
-        BlockingModeSession(
+    _readingSession = BlockingModeSession(
       mode: BlockingMode.reading,
       coordinator: coordinator,
     );
 
-    _morningSession =
-        MorningRoutineSession();
+    _morningSession = MorningRoutineSession();
 
-    _nightSession =
-        NightRoutineSession();
+    _nightSession = NightRoutineSession();
   }
 
   /// Looks for a login saved on this phone, so the user does not have to
@@ -149,29 +141,18 @@ class _MyAppState extends State<MyApp> {
       // Login is the first screen.
       home: _restoringLogin
           // Short moment while the saved login is checked.
-          ? const Scaffold(
-              body: Center(
-                child: CircularProgressIndicator(),
-              ),
-            )
+          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
           : _currentUser == null
-          ? LoginScreen(
-              onLogin: _handleLogin,
-            )
-
+          ? LoginScreen(onLogin: _handleLogin)
           // Logged-in user:
           // Open the actual application (Today, Insights and Settings).
           : AppShell(
               user: _currentUser!,
               onLogout: _handleLogout,
-              focusSession:
-                  _focusTimerController,
-              readingSession:
-                  _readingSession,
-              morningSession:
-                  _morningSession,
-              nightSession:
-                  _nightSession,
+              focusSession: _focusTimerController,
+              readingSession: _readingSession,
+              morningSession: _morningSession,
+              nightSession: _nightSession,
             ),
     );
   }
