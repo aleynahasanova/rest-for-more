@@ -111,7 +111,12 @@ class _BlockingPermissionsScreenState extends State<BlockingPermissionsScreen>
                       ),
                 ),
               ),
-              const Spacer(),
+              if (!isIOS && !_isEnabled) ...[
+                const SizedBox(height: 20),
+                const Expanded(child: _AccessibilityGuide()),
+                const SizedBox(height: 16),
+              ] else
+                const Spacer(),
               if (!_isEnabled)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -139,6 +144,39 @@ class _BlockingPermissionsScreenState extends State<BlockingPermissionsScreen>
                 onPressed: () => Navigator.of(context).pop(_isEnabled),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccessibilityGuide extends StatelessWidget {
+  const _AccessibilityGuide();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label:
+          'Guide: open Installed apps, tap Rest for More, then turn it on.',
+      image: true,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360, maxHeight: 320),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F1F3),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Image.asset(
+                'assets/images/accessibility_guide.gif',
+                fit: BoxFit.contain,
+                gaplessPlayback: true,
+              ),
+            ),
           ),
         ),
       ),
