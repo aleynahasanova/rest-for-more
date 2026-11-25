@@ -24,6 +24,9 @@ class MainActivity : FlutterActivity() {
         private const val BLOCKING_CHANNEL =
             "rest_for_more/app_blocking"
 
+        private const val DEEP_LINK_CHANNEL =
+            "rest_for_more/deep_link"
+
         private const val NOTIFICATION_CHANNEL_ID =
             "focus_timer"
 
@@ -38,6 +41,10 @@ class MainActivity : FlutterActivity() {
         mutableMapOf<Boolean, Pair<Long, String>>()
 
     private var permissionRequestPending = false
+
+    private var deepLinkChannel: MethodChannel? = null
+
+    private var pendingDeepLink: String? = null
 
     override fun configureFlutterEngine(
         flutterEngine: FlutterEngine,
@@ -311,6 +318,42 @@ class MainActivity : FlutterActivity() {
 
                 else -> result.notImplemented()
             }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            DEEP_LINK_CHANNEL,
+        ).also { channel ->
+            deepLinkChannel = channel
+            channel.setMethodCallHandler { call, result ->
+                if (call.method == "getInitial") {
+                    val initial = pendingDeepLink
+                        ?: deepLinkFrom(intent)
+                    pendingDeepLink = null
+                    result.success(initial)
+                } else {
+                    result.notImplemented()
+                }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val data = deepLinkFrom(intent) ?: return
+        val channel = deepLinkChannel
+        if (channel == null) {
+            pendingDeepLink = data
+        } else {
+            channel.invokeMethod("opened", data)
+        }
+    }
+
+    private fun deepLinkFrom(intent: Intent?): String? {
+        val data = intent?.dataString ?: return null
+        return data.takeIf {
+            it.startsWith("restformore:", ignoreCase = true)
         }
     }
 

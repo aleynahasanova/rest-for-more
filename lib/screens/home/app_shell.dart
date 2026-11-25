@@ -5,6 +5,7 @@ import '../../controllers/morning_routine_session.dart';
 import '../../controllers/night_routine_session.dart';
 import '../../models/program_day.dart';
 import '../../models/user.dart';
+import '../../services/mode_launch_service.dart';
 import '../../services/program_service.dart';
 import '../../theme/app_colors.dart';
 import '../focusmode.dart';
@@ -62,8 +63,17 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
-
+    ModeLaunchService.instance.addListener(_openPendingLaunch);
     _loadProgramme(openOnboardingIfMissing: true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _openPendingLaunch();
+    });
+  }
+
+  @override
+  void dispose() {
+    ModeLaunchService.instance.removeListener(_openPendingLaunch);
+    super.dispose();
   }
 
   // ---------------------------------------------------------------------
@@ -186,6 +196,29 @@ class _AppShellState extends State<AppShell> {
   // ---------------------------------------------------------------------
   // FEATURES
   // ---------------------------------------------------------------------
+
+  void _openPendingLaunch() {
+    final mode = ModeLaunchService.instance.take();
+    if (mode == null) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      switch (mode) {
+        case LaunchMode.focus:
+          _openFocus();
+        case LaunchMode.reading:
+          _openReading();
+        case LaunchMode.morning:
+          _openMorning();
+        case LaunchMode.evening:
+          _openEvening();
+      }
+    });
+  }
 
   void _openFocus() {
     _open(FocusModeScreen(controller: widget.focusSession));

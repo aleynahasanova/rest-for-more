@@ -6,6 +6,19 @@ import SwiftUI
 import UIKit
 import UserNotifications
 
+enum DeepLinkBridge {
+  static var channel: FlutterMethodChannel?
+  static var pending: String?
+
+  static func send(_ uri: String) {
+    if let channel {
+      channel.invokeMethod("opened", arguments: uri)
+    } else {
+      pending = uri
+    }
+  }
+}
+
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var blockingChannel: FlutterMethodChannel?
@@ -37,6 +50,31 @@ import UserNotifications
     ).setMethodCallHandler { call, result in
       FocusTimerNotifications.handle(call, result: result)
     }
+
+    let deepLink = FlutterMethodChannel(
+      name: "rest_for_more/deep_link",
+      binaryMessenger: messenger)
+    DeepLinkBridge.channel = deepLink
+    deepLink.setMethodCallHandler { call, result in
+      if call.method == "getInitial" {
+        result(DeepLinkBridge.pending)
+        DeepLinkBridge.pending = nil
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  override func application(
+    _ app: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+  ) -> Bool {
+    if url.scheme?.lowercased() == "restformore" {
+      DeepLinkBridge.send(url.absoluteString)
+      return true
+    }
+    return super.application(app, open: url, options: options)
   }
 }
 

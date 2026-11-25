@@ -8,6 +8,7 @@ import 'models/blocking_mode.dart';
 import 'models/user.dart';
 import 'screens/home/app_shell.dart';
 import 'screens/login_screen.dart';
+import 'services/mode_launch_service.dart';
 import 'services/session_store.dart';
 import 'services/user_service.dart';
 import 'theme/app_theme.dart';
@@ -54,6 +55,7 @@ class _MyAppState extends State<MyApp> {
     super.initState();
 
     _restoreLogin();
+    ModeLaunchService.instance.start();
 
     final coordinator = BlockingSessionCoordinator();
 
